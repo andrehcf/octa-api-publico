@@ -240,6 +240,37 @@
     });
   }
 
+  // Tabela de categorias na tela de Performance (mesma agregação da seção "Por Categoria").
+  function renderCategoriasPerf() {
+    const tabela = $("tabelaCategoriasP");
+    if (!tabela) return;
+    const p = periodo();
+    if (!p) return;
+    const mesesSel = mesesDoPeriodo(p);
+    const porCat = {};
+    for (const r of estado.dados.categoriasMes) {
+      if (!mesesSel.has(r.mes)) continue;
+      const c = porCat[r.categoria_nome] ||
+        (porCat[r.categoria_nome] = { volume: 0, resp: 0, satis: 0, tma: null, tmaMes: "" });
+      c.volume += r.volume;
+      c.resp += r.csat_respondidos;
+      c.satis += r.csat_satisfeitos;
+      if (r.mes > c.tmaMes && r.tma_mediana_seg !== null) { c.tmaMes = r.mes; c.tma = r.tma_mediana_seg; }
+    }
+    const cats = Object.entries(porCat).sort((a, b) => b[1].volume - a[1].volume).slice(0, 20);
+    const sub = $("subCategoriasP");
+    if (sub) sub.textContent =
+      `Top ${cats.length} categorias — ${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)}`;
+    tabela.querySelector("tbody").innerHTML = cats.map(([nome, c]) => `
+      <tr>
+        <td>${nome}</td>
+        <td class="num">${KPIS.fmtInt(c.volume)}</td>
+        <td class="num">${KPIS.fmtDuracao(c.tma)}</td>
+        <td class="num">${c.resp ? KPIS.fmtPct(100 * c.satis / c.resp) : "—"}</td>
+        <td class="num">${KPIS.fmtInt(c.resp)}</td>
+      </tr>`).join("") || `<tr><td colspan="5" class="empty-note">Sem dados no período</td></tr>`;
+  }
+
   // ══════════════ DIA X HORA ══════════════
 
   function renderDiaHora() {
@@ -253,6 +284,9 @@
     const tmaPorHora = Array.from({ length: 24 }, () => ({ soma: 0, n: 0 }));
     const csatPorHora = Array.from({ length: 24 }, () => ({ resp: 0, sat: 0, rsim: 0, rtot: 0 }));
     const volPorHora = Array(24).fill(0);
+    const tmeMinPorHora = Array(24).fill(null);   // menor TME (min dos mínimos diários)
+    const tmeMaxPorHora = Array(24).fill(null);   // maior TME (max dos máximos diários)
+    const analistasPorHora = Array.from({ length: 24 }, () => new Set());  // distintos no período
     for (const r of linhas) {
       const dow = new Date(r.dia + "T00:00:00").getDay();
       grade[dow][r.hora] += r.volume;
@@ -266,6 +300,12 @@
       c.sat += r.csat_satisfeitos || 0;
       c.rsim += r.resolvidos_sim || 0;
       c.rtot += r.resolvidos_total || 0;
+      if (r.tme_min_seg != null)
+        tmeMinPorHora[r.hora] = tmeMinPorHora[r.hora] == null ? r.tme_min_seg : Math.min(tmeMinPorHora[r.hora], r.tme_min_seg);
+      if (r.tme_max_seg != null)
+        tmeMaxPorHora[r.hora] = tmeMaxPorHora[r.hora] == null ? r.tme_max_seg : Math.max(tmeMaxPorHora[r.hora], r.tme_max_seg);
+      const ana = typeof r.analistas === "string" ? JSON.parse(r.analistas) : (r.analistas || []);
+      for (const a of ana) analistasPorHora[r.hora].add(a);
     }
     const maxCell = Math.max(1, ...grade.flat());
     const DOWS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -283,29 +323,8 @@
     const elHm = $("heatmap");
     if (elHm) elHm.innerHTML = html;
 
-    const horas = Array.from({ length: 24 }, (_, h) => h);
-    novoChart("chartVolumeHora", {
-      type: "bar",
-      data: {
-        labels: horas.map((h) => `${h}h`),
-        datasets: [{ data: volPorHora, backgroundColor: "rgba(79,124,247,0.8)", borderRadius: 5, borderSkipped: false }],
-      },
-      options: opts({ y: { beginAtZero: true } }),
-    });
-    novoChart("chartTmeHora", {
-      type: "bar",
-      data: {
-        labels: horas.map((h) => `${h}h`),
-        datasets: [{
-          data: tmePorHora.map((x) => x.n ? x.soma / x.n / 60 : null),
-          backgroundColor: "rgba(34,211,238,0.8)", borderRadius: 5, borderSkipped: false,
-        }],
-      },
-      options: opts({ y: { beginAtZero: true } }),
-    });
-
-    // ── Série temporal combinada (por hora): Volume · TMA · TME · CSAT · Resolvidos · Engajamento ──
-    // 3 eixos: Volume (esq.), Minutos (dir.), % (dir. externa). Só as horas com volume.
+    // Só as horas com volume (remove madrugada/horários vazios) — usado por todos os
+    // gráficos horários (Volume, TME e Série temporal).
     let hIni = 24, hFim = -1;
     for (let h = 0; h < 24; h++) if (volPorHora[h] > 0) { if (h < hIni) hIni = h; if (h > hFim) hFim = h; }
     if (hFim < hIni) { hIni = 0; hFim = 23; }
@@ -313,6 +332,52 @@
     for (let h = hIni; h <= hFim; h++) hs.push(h);
     const pctH = (a, b) => (b ? 100 * a / b : null);
     const minH = (o) => (o.n ? o.soma / o.n / 60 : null);
+
+    novoChart("chartVolumeHora", {
+      type: "bar",
+      data: {
+        labels: hs.map((h) => `${h}h`),
+        datasets: [{ data: hs.map((h) => volPorHora[h]), backgroundColor: "rgba(79,124,247,0.8)", borderRadius: 5, borderSkipped: false }],
+      },
+      options: opts({ y: { beginAtZero: true } }),
+    });
+
+    // TME por hora — tooltip estilo octa-api (TME médio/menor/maior, volume, analistas).
+    novoChart("chartTmeHora", {
+      type: "bar",
+      data: {
+        labels: hs.map((h) => `${h}h`),
+        datasets: [{
+          data: hs.map((h) => (tmePorHora[h].n ? tmePorHora[h].soma / tmePorHora[h].n / 60 : null)),
+          backgroundColor: "rgba(34,211,238,0.8)", borderRadius: 5, borderSkipped: false,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            displayColors: false,
+            callbacks: {
+              title: (items) => items[0].label,
+              label: (item) => {
+                const h = hs[item.dataIndex];
+                const t = tmePorHora[h];
+                const medio = t.n ? t.soma / t.n : null;
+                return [
+                  `TME médio: ${KPIS.fmtDuracao(medio)}`,
+                  `Menor TME: ${KPIS.fmtDuracao(tmeMinPorHora[h])}`,
+                  `Maior TME: ${KPIS.fmtDuracao(tmeMaxPorHora[h])}`,
+                  `Volume atendido: ${KPIS.fmtInt(t.n)}`,
+                  `Analistas: ${analistasPorHora[h].size}`,
+                ];
+              },
+            },
+          },
+        },
+        scales: { x: { grid: { color: GRID } }, y: { grid: { color: GRID }, beginAtZero: true } },
+      },
+    });
     novoChart("chartSerieHora", {
       type: "line",
       data: {
@@ -587,7 +652,7 @@
   }
 
   const RENDERS = {
-    performance: () => { renderPerformance(); renderDiaHora(); renderDistTma(); },
+    performance: () => { renderPerformance(); renderDiaHora(); renderDistTma(); renderCategoriasPerf(); },
     tickets: renderTickets,
     categorias: renderCategorias,
     ranking: renderRanking,
