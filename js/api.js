@@ -6,16 +6,23 @@
 
 const API = (() => {
   const cliente = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-  const LIMITE = 10000; // acima do cap default de 1000 linhas do PostgREST
+  const PAGINA = 1000; // teto por request do PostgREST (Supabase) — .limit() não o ultrapassa
 
+  // Carrega TODAS as linhas paginando com .range() (senão tabelas > 1000 linhas,
+  // como agg_chats_hora, chegariam cortadas e faltariam os dias mais recentes).
   async function tabela(nome, ordem) {
-    const { data, error } = await cliente
-      .from(nome)
-      .select("*")
-      .order(ordem, { ascending: true })
-      .limit(LIMITE);
-    if (error) throw new Error(`${nome}: ${error.message}`);
-    return data || [];
+    const todas = [];
+    for (let de = 0; ; de += PAGINA) {
+      const { data, error } = await cliente
+        .from(nome)
+        .select("*")
+        .order(ordem, { ascending: true })
+        .range(de, de + PAGINA - 1);
+      if (error) throw new Error(`${nome}: ${error.message}`);
+      todas.push(...(data || []));
+      if (!data || data.length < PAGINA) break;
+    }
+    return todas;
   }
 
   // Carrega todas as tabelas em paralelo; retorna { nomeLogico: linhas }
