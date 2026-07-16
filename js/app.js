@@ -590,8 +590,7 @@
   }
 
   const RENDERS = {
-    performance: renderPerformance,
-    diahora: renderDiaHora,
+    performance: () => { renderPerformance(); renderDiaHora(); },
     tickets: renderTickets,
     categorias: renderCategorias,
     ranking: renderRanking,
@@ -600,7 +599,6 @@
 
   const TITULOS = {
     performance: ["Performance de Atendimento", "KPIs de chats — volume, tempos, qualidade"],
-    diahora: ["Dia x Hora", "Distribuição dos atendimentos ao longo da semana"],
     tickets: ["Tickets", "Fluxo, formulários e status"],
     categorias: ["Por Categoria", "Volume, TMA e CSAT por categoria de atendimento"],
     ranking: ["Ranking de Analistas", "Score ponderado mensal"],
