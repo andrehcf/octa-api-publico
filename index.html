@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPlug Suporte — Performance de Atendimento</title>
+<link rel="stylesheet" href="css/style.css?v=4">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+<div class="overlay" id="overlay"></div>
+
+<!-- ═══ LOGIN (cobre tudo até autenticar) ═══ -->
+<div class="login-screen" id="loginScreen">
+  <form class="login-card" id="loginForm" autocomplete="on">
+    <div class="login-logo"><span class="logo-badge">⚡ CPlug</span><span class="logo-sub">Suporte</span></div>
+    <h2 class="login-title">Acesso restrito</h2>
+    <p class="login-sub-text">Entre com suas credenciais para ver a dashboard.</p>
+    <label class="login-field">E-mail
+      <input type="email" id="loginEmail" autocomplete="username" required>
+    </label>
+    <label class="login-field">Senha
+      <input type="password" id="loginPassword" autocomplete="current-password" required>
+    </label>
+    <button type="submit" class="login-btn" id="loginBtn">Entrar</button>
+    <div class="login-error hidden" id="loginError"></div>
+  </form>
+</div>
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside class="sidebar" id="sidebar">
+  <div class="logo">
+    <div class="logo-badge">⚡ CPlug</div>
+    <div class="logo-sub">Suporte</div>
+  </div>
+  <nav class="nav" id="nav">
+    <div class="nav-item active" data-section="performance"><span class="icon">📊</span> Performance</div>
+    <div class="nav-item" data-section="diahora"><span class="icon">📅</span> Dia x Hora</div>
+    <div class="nav-item" data-section="tickets"><span class="icon">🎫</span> Tickets</div>
+    <div class="nav-item" data-section="categorias"><span class="icon">🏷️</span> Por Categoria</div>
+    <div class="nav-item" data-section="ranking"><span class="icon">🏆</span> Ranking</div>
+    <div class="nav-item" data-section="reincidencia"><span class="icon">🔁</span> Reincidência</div>
+  </nav>
+  <div class="sidebar-footer" id="sidebarFooter">
+    <div><span class="status-dot" id="statusDot" style="display:inline-block"></span> <span id="statusTexto">Carregando…</span></div>
+    <button class="btn-sair" id="btnSair">⎋ Sair</button>
+  </div>
+</aside>
+
+<!-- ═══ MAIN ═══ -->
+<main class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="hamburger" id="hamburger" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="page-title">
+        <h1 id="pageTitle">Performance de Atendimento</h1>
+        <p id="pageSubtitle">Métricas operacionais do suporte</p>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <div class="tab-group" id="periodoTabs">
+        <button class="tab" data-dias="7">7 dias</button>
+        <button class="tab active" data-dias="30">30 dias</button>
+        <button class="tab" data-dias="90">90 dias</button>
+        <button class="tab" data-dias="0">Tudo</button>
+      </div>
+      <div class="date-range" id="dateRange" title="Período personalizado">
+        <input type="date" id="dataInicio" class="date-input" aria-label="Data inicial">
+        <span class="date-sep">→</span>
+        <input type="date" id="dataFim" class="date-input" aria-label="Data final">
+        <button class="date-clear hidden" id="dateClear" title="Limpar período personalizado" aria-label="Limpar">×</button>
+      </div>
+      <select class="select-fila" id="filaSelect" title="Fila"></select>
+    </div>
+  </div>
+
+  <div class="error-banner hidden" id="errorBanner"></div>
+
+  <!-- ═══ SEÇÃO: PERFORMANCE ═══ -->
+  <section class="section active" id="sec-performance">
+    <div class="kpi-grid">
+      <div class="kpi-card blue">
+        <div class="kpi-header"><div class="kpi-icon blue">👤</div><span class="kpi-label">Volume</span></div>
+        <div class="kpi-value blue" id="kpiVolume">—</div>
+        <div class="kpi-delta" id="kpiVolumeDelta"></div>
+      </div>
+      <div class="kpi-card cyan">
+        <div class="kpi-header"><div class="kpi-icon cyan">⏱️</div><span class="kpi-label">TME</span></div>
+        <div class="kpi-value cyan" id="kpiTme">—</div>
+        <div class="kpi-delta" id="kpiTmeDelta"></div>
+      </div>
+      <div class="kpi-card teal">
+        <div class="kpi-header"><div class="kpi-icon teal">⌛</div><span class="kpi-label">TMA</span></div>
+        <div class="kpi-value teal" id="kpiTma">—</div>
+        <div class="kpi-delta" id="kpiTmaDelta"></div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-header"><div class="kpi-icon red">⚠️</div><span class="kpi-label">Abandono</span></div>
+        <div class="kpi-value red" id="kpiAbandono">—</div>
+        <div class="kpi-delta" id="kpiAbandonoDelta"></div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-header"><div class="kpi-icon green">😊</div><span class="kpi-label">CSAT</span></div>
+        <div class="kpi-value green" id="kpiCsat">—</div>
+        <div class="kpi-delta" id="kpiCsatDelta"></div>
+      </div>
+      <div class="kpi-card indigo">
+        <div class="kpi-header"><div class="kpi-icon indigo">✅</div><span class="kpi-label">Resolvidos</span></div>
+        <div class="kpi-value indigo" id="kpiResolvidos">—</div>
+        <div class="kpi-delta" id="kpiResolvidosDelta"></div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-header"><div class="kpi-icon purple">🤝</div><span class="kpi-label">Engajamento</span></div>
+        <div class="kpi-value purple" id="kpiEngajamento">—</div>
+        <div class="kpi-delta" id="kpiEngajamentoDelta"></div>
+      </div>
+    </div>
+
+    <div class="chart-grid half">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Volume Diário de Atendimentos</div>
+            <div class="card-subtitle" id="subVolumeDia"></div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartVolumeDia"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Evolução do Tempo de Atendimento</div>
+            <div class="card-subtitle">TME e TMA médios por dia (minutos)</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartTempoDia"></canvas></div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#22d3ee"></div> TME (min)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#14b8a6"></div> TMA (min)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Evolução da Qualidade</div>
+            <div class="card-subtitle">Abandono · CSAT · Engajamento (% por dia)</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartQualidade"></canvas></div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div> Abandono %</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div> CSAT %</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div> Engajamento %</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Volume Mensal</div>
+            <div class="card-subtitle">Atendimentos por mês (janela completa)</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartVolumeMes"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Top 5 Categorias</div>
+            <div class="card-subtitle" id="subTopCat">Volume no período</div>
+          </div>
+        </div>
+        <div class="bar-list" id="topCategorias"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SEÇÃO: DIA X HORA ═══ -->
+  <section class="section" id="sec-diahora">
+    <div class="chart-grid full">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Heatmap — Dia da Semana × Hora</div>
+            <div class="card-subtitle">Volume de atendimentos (todas as filas)</div>
+          </div>
+        </div>
+        <div class="heatmap" id="heatmap"></div>
+      </div>
+    </div>
+    <div class="chart-grid half">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Volume por Hora</div>
+            <div class="card-subtitle">Total de atendimentos por hora do dia (BRT)</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartVolumeHora"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">TME Médio por Hora</div>
+            <div class="card-subtitle">Tempo médio de espera na fila (minutos)</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartTmeHora"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SEÇÃO: TICKETS ═══ -->
+  <section class="section" id="sec-tickets">
+    <div class="kpi-grid cols-4">
+      <div class="kpi-card blue">
+        <div class="kpi-header"><div class="kpi-icon blue">📥</div><span class="kpi-label">Abertos no período</span></div>
+        <div class="kpi-value blue" id="kpiTktAbertos">—</div>
+        <div class="kpi-delta" id="kpiTktAbertosDelta"></div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-header"><div class="kpi-icon green">📤</div><span class="kpi-label">Fechados no período</span></div>
+        <div class="kpi-value green" id="kpiTktFechados">—</div>
+        <div class="kpi-delta" id="kpiTktFechadosDelta"></div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-header"><div class="kpi-icon amber">⚖️</div><span class="kpi-label">Saldo (abertos − fechados)</span></div>
+        <div class="kpi-value amber" id="kpiTktSaldo">—</div>
+        <div class="kpi-delta"></div>
+      </div>
+      <div class="kpi-card teal">
+        <div class="kpi-header"><div class="kpi-icon teal">⌛</div><span class="kpi-label">TMA mediana (mês atual)</span></div>
+        <div class="kpi-value teal" id="kpiTktTma">—</div>
+        <div class="kpi-delta"></div>
+      </div>
+    </div>
+
+    <div class="chart-grid full">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Fluxo Diário de Tickets</div>
+            <div class="card-subtitle">Abertos (por criação) vs fechados (Resolvido/Cancelado)</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartTicketsFluxo"></canvas></div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#4f7cf7"></div> Abertos</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div> Fechados</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-grid two-one">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Top Formulários</div>
+            <div class="card-subtitle" id="subTktForms">Tickets por formulário</div>
+          </div>
+        </div>
+        <div class="bar-list" id="ticketsForms"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Por Status</div>
+            <div class="card-subtitle">Distribuição no período</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartTicketsStatus"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SEÇÃO: CATEGORIAS ═══ -->
+  <section class="section" id="sec-categorias">
+    <div class="chart-grid full">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Categorias de Atendimento</div>
+            <div class="card-subtitle" id="subCategorias">Top categorias por volume, com TMA mediana e CSAT</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data" id="tabelaCategorias">
+            <thead>
+              <tr>
+                <th>Categoria</th>
+                <th class="num">Volume</th>
+                <th class="num">TMA mediana</th>
+                <th class="num">CSAT</th>
+                <th class="num">Respondidos</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="chart-grid full">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Distribuição de TMA</div>
+            <div class="card-subtitle" id="subTmaDist">Histograma do mês mais recente</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartTmaDist"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SEÇÃO: RANKING ═══ -->
+  <section class="section" id="sec-ranking">
+    <div class="chart-grid full">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Ranking de Analistas</div>
+            <div class="card-subtitle" id="subRanking">Score ponderado: volume, engajamento, CSAT, resolvidos + bônus TMA</div>
+          </div>
+          <select class="select-fila" id="rankingMes"></select>
+        </div>
+        <div class="table-wrap">
+          <table class="data" id="tabelaRanking">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Analista</th>
+                <th class="num">Score</th>
+                <th class="num">Volume</th>
+                <th class="num">Participação</th>
+                <th class="num">Engajamento</th>
+                <th class="num">CSAT</th>
+                <th class="num">Resolvidos</th>
+                <th class="num">TMA</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SEÇÃO: REINCIDÊNCIA ═══ -->
+  <section class="section" id="sec-reincidencia">
+    <div class="kpi-grid cols-4">
+      <div class="kpi-card red">
+        <div class="kpi-header"><div class="kpi-icon red">🔁</div><span class="kpi-label">Taxa de reincidência</span></div>
+        <div class="kpi-value red" id="kpiReincTaxa">—</div>
+        <div class="kpi-delta"><span id="subReincTaxa"></span></div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-header"><div class="kpi-icon blue">👥</div><span class="kpi-label">Contatos reincidentes</span></div>
+        <div class="kpi-value blue" id="kpiReincContatos">—</div>
+        <div class="kpi-delta"></div>
+      </div>
+      <div class="kpi-card cyan">
+        <div class="kpi-header"><div class="kpi-icon cyan">⏱️</div><span class="kpi-label">Tempo médio até voltar</span></div>
+        <div class="kpi-value cyan" id="kpiReincTempo">—</div>
+        <div class="kpi-delta"></div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-header"><div class="kpi-icon amber">🏷️</div><span class="kpi-label">Mesma categoria</span></div>
+        <div class="kpi-value amber" id="kpiReincMesmaCat">—</div>
+        <div class="kpi-delta"></div>
+      </div>
+    </div>
+    <div class="chart-grid full">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Evolução Mensal da Reincidência</div>
+            <div class="card-subtitle">Clientes que voltaram em até 7 dias (% dos contatos do mês)</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartReincMes"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="data-status">
+    <span id="footerAtualizado">Carregando dados…</span>
+  </div>
+
+</main>
+
+<script src="js/config.js?v=4"></script>
+<script src="js/kpis.js?v=4"></script>
+<script src="js/api.js?v=4"></script>
+<script src="js/app.js?v=4"></script>
+</body>
+</html>
