@@ -21,6 +21,7 @@ const KPIS = {
   // KPIs completos de chats a partir das linhas diárias (agg_chats_dia)
   kpisChats(rows) {
     const volume = this.soma(rows, "volume_atendido");
+    const transferidos = this.soma(rows, "total_transferidos");
     const fechados = this.soma(rows, "total_fechados");
     const semAtender = this.soma(rows, "fechados_sem_atender");
     const respondidos = this.soma(rows, "csat_respondidos");
@@ -28,9 +29,12 @@ const KPIS = {
     const resolvSim = this.soma(rows, "resolvidos_sim");
     const resolvTotal = this.soma(rows, "resolvidos_total");
     return {
-      volume,
+      volume, transferidos, semAtender, respondidos, resolvSim, resolvTotal,
+      tmeN: this.soma(rows, "tme_n"),
+      tmaN: this.soma(rows, "tma_n"),
       tmeSeg: this.mediaPonderada(rows, "tme_soma_seg", "tme_n"),
       tmaSeg: this.mediaPonderada(rows, "tma_soma_seg", "tma_n"),
+      csatMedia: this.mediaPonderada(rows, "csat_soma_score", "csat_n"),
       abandonoPct: fechados > 0 ? (100 * semAtender / fechados) : null,
       csatPct: respondidos > 0 ? (100 * satisfeitos / respondidos) : null,
       resolvidosPct: resolvTotal > 0 ? (100 * resolvSim / resolvTotal) : null,
@@ -113,5 +117,21 @@ const KPIS = {
     const seta = subiu ? "▲" : "▼";
     const valor = fmt ? fmt(Math.abs(diff)) : Math.abs(diff).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
     return `<span class="${cls}">${seta} <strong>${valor}${sufixo}</strong></span> <span>vs anterior</span>`;
+  },
+
+  // Delta em % RELATIVO (estilo octa-api): só a seta + variação percentual.
+  // inverso=true quando "menor é melhor" (TME, TMA, Abandono).
+  deltaPctHtml(atual, anterior, inverso = false) {
+    if (atual === null || atual === undefined || anterior === null ||
+        anterior === undefined || !isFinite(anterior) || anterior === 0) {
+      return `<span class="delta-neutral">—</span>`;
+    }
+    const diff = atual - anterior;
+    if (Math.abs(diff) < 1e-9) return `<span class="delta-neutral">=</span>`;
+    const subiu = diff > 0;
+    const bom = inverso ? !subiu : subiu;
+    const cls = subiu ? (bom ? "delta-up" : "delta-up-bad") : (bom ? "delta-down-good" : "delta-down");
+    const pct = Math.abs(100 * diff / anterior);
+    return `<span class="${cls}">${subiu ? "▲" : "▼"} ${pct.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>`;
   },
 };

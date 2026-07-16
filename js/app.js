@@ -144,21 +144,41 @@
       ? KPIS.kpisChats(linhasFilaPorDia(estado.fila, pAnt.inicio, pAnt.fim))
       : {};
 
-    $("kpiVolume").textContent = KPIS.fmtInt(k.volume);
-    $("kpiTme").textContent = KPIS.fmtDuracao(k.tmeSeg);
-    $("kpiTma").textContent = KPIS.fmtDuracao(k.tmaSeg);
-    $("kpiAbandono").textContent = KPIS.fmtPct(k.abandonoPct, 2);
-    $("kpiCsat").textContent = KPIS.fmtPct(k.csatPct, 2);
-    $("kpiResolvidos").textContent = KPIS.fmtPct(k.resolvidosPct, 2);
-    $("kpiEngajamento").textContent = KPIS.fmtPct(k.engajamentoPct, 2);
+    const setar = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+    const setarH = (id, html) => { const el = $(id); if (el) el.innerHTML = html; };
+    const media1 = (x) => (x == null ? "—" : x.toLocaleString("pt-BR", { maximumFractionDigits: 1 }));
 
-    $("kpiVolumeDelta").innerHTML = KPIS.deltaHtml(k.volume, kAnt.volume, { fmt: KPIS.fmtInt });
-    $("kpiTmeDelta").innerHTML = KPIS.deltaHtml(k.tmeSeg, kAnt.tmeSeg, { inverso: true, fmt: KPIS.fmtDuracao.bind(KPIS) });
-    $("kpiTmaDelta").innerHTML = KPIS.deltaHtml(k.tmaSeg, kAnt.tmaSeg, { inverso: true, fmt: KPIS.fmtDuracao.bind(KPIS) });
-    $("kpiAbandonoDelta").innerHTML = KPIS.deltaHtml(k.abandonoPct, kAnt.abandonoPct, { inverso: true, sufixo: " p.p." });
-    $("kpiCsatDelta").innerHTML = KPIS.deltaHtml(k.csatPct, kAnt.csatPct, { sufixo: " p.p." });
-    $("kpiResolvidosDelta").innerHTML = KPIS.deltaHtml(k.resolvidosPct, kAnt.resolvidosPct, { sufixo: " p.p." });
-    $("kpiEngajamentoDelta").innerHTML = KPIS.deltaHtml(k.engajamentoPct, kAnt.engajamentoPct, { sufixo: " p.p." });
+    // Valores
+    setar("kpiVolume", KPIS.fmtInt(k.volume));
+    setar("kpiTme", KPIS.fmtDuracao(k.tmeSeg));
+    setar("kpiTma", KPIS.fmtDuracao(k.tmaSeg));
+    setar("kpiAbandono", KPIS.fmtPct(k.abandonoPct, 1));
+    setar("kpiCsat", KPIS.fmtPct(k.csatPct, 1));
+    setar("kpiResolvidos", KPIS.fmtPct(k.resolvidosPct, 1));
+
+    // Delta % relativo (estilo octa-api)
+    setarH("kpiVolumeDelta", KPIS.deltaPctHtml(k.volume, kAnt.volume));
+    setarH("kpiTmeDelta", KPIS.deltaPctHtml(k.tmeSeg, kAnt.tmeSeg, true));
+    setarH("kpiTmaDelta", KPIS.deltaPctHtml(k.tmaSeg, kAnt.tmaSeg, true));
+    setarH("kpiAbandonoDelta", KPIS.deltaPctHtml(k.abandonoPct, kAnt.abandonoPct, true));
+    setarH("kpiCsatDelta", KPIS.deltaPctHtml(k.csatPct, kAnt.csatPct));
+    setarH("kpiResolvidosDelta", KPIS.deltaPctHtml(k.resolvidosPct, kAnt.resolvidosPct));
+
+    // ANTERIOR (valor absoluto do período anterior)
+    setar("kpiVolumeAnt", KPIS.fmtInt(kAnt.volume));
+    setar("kpiTmeAnt", KPIS.fmtDuracao(kAnt.tmeSeg));
+    setar("kpiTmaAnt", KPIS.fmtDuracao(kAnt.tmaSeg));
+    setar("kpiAbandonoAnt", KPIS.fmtPct(kAnt.abandonoPct, 1));
+    setar("kpiCsatAnt", KPIS.fmtPct(kAnt.csatPct, 1));
+    setar("kpiResolvidosAnt", KPIS.fmtPct(kAnt.resolvidosPct, 1));
+
+    // Rodapé de contexto (igual octa-api)
+    setar("kpiVolumeFoot", `de ${KPIS.fmtInt(k.transferidos)} transferidos`);
+    setar("kpiTmeFoot", `baseado em ${KPIS.fmtInt(k.tmeN)} chats`);
+    setar("kpiTmaFoot", `baseado em ${KPIS.fmtInt(k.tmaN)} chats`);
+    setar("kpiAbandonoFoot", `${KPIS.fmtInt(k.semAtender)} de ${KPIS.fmtInt(k.transferidos)} transferidos`);
+    setar("kpiCsatFoot", `${KPIS.fmtInt(k.respondidos)} resp. · méd. ${media1(k.csatMedia)} · ${KPIS.fmtPct(k.engajamentoPct)} eng.`);
+    setar("kpiResolvidosFoot", `${KPIS.fmtInt(k.resolvSim)} / ${KPIS.fmtInt(k.resolvTotal)} resolvidos`);
 
     const labels = linhas.map((r) => KPIS.fmtDiaCurto(r.dia));
     const subVol = $("subVolumeDia");

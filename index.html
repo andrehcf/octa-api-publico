@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=10">
+<link rel="stylesheet" href="css/style.css?v=11">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -86,39 +86,40 @@
   <section class="section active" id="sec-performance">
     <div class="kpi-grid">
       <div class="kpi-card blue">
-        <div class="kpi-header"><div class="kpi-icon blue">👤</div><span class="kpi-label">Volume</span></div>
+        <div class="kpi-header"><div class="kpi-icon blue">👤</div><span class="kpi-label">Volume atendido</span></div>
         <div class="kpi-value blue" id="kpiVolume">—</div>
-        <div class="kpi-delta" id="kpiVolumeDelta"></div>
+        <div class="kpi-row"><span class="kpi-delta" id="kpiVolumeDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiVolumeAnt">—</b></span></div>
+        <div class="kpi-foot" id="kpiVolumeFoot"></div>
       </div>
       <div class="kpi-card cyan">
-        <div class="kpi-header"><div class="kpi-icon cyan">⏱️</div><span class="kpi-label">TME</span></div>
+        <div class="kpi-header"><div class="kpi-icon cyan">⏱️</div><span class="kpi-label">TME (espera)</span></div>
         <div class="kpi-value cyan" id="kpiTme">—</div>
-        <div class="kpi-delta" id="kpiTmeDelta"></div>
+        <div class="kpi-row"><span class="kpi-delta" id="kpiTmeDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiTmeAnt">—</b></span></div>
+        <div class="kpi-foot" id="kpiTmeFoot"></div>
       </div>
       <div class="kpi-card teal">
-        <div class="kpi-header"><div class="kpi-icon teal">⌛</div><span class="kpi-label">TMA</span></div>
+        <div class="kpi-header"><div class="kpi-icon teal">⌛</div><span class="kpi-label">TMA (atendimento)</span></div>
         <div class="kpi-value teal" id="kpiTma">—</div>
-        <div class="kpi-delta" id="kpiTmaDelta"></div>
+        <div class="kpi-row"><span class="kpi-delta" id="kpiTmaDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiTmaAnt">—</b></span></div>
+        <div class="kpi-foot" id="kpiTmaFoot"></div>
       </div>
       <div class="kpi-card red">
         <div class="kpi-header"><div class="kpi-icon red">⚠️</div><span class="kpi-label">Abandono</span></div>
         <div class="kpi-value red" id="kpiAbandono">—</div>
-        <div class="kpi-delta" id="kpiAbandonoDelta"></div>
+        <div class="kpi-row"><span class="kpi-delta" id="kpiAbandonoDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiAbandonoAnt">—</b></span></div>
+        <div class="kpi-foot" id="kpiAbandonoFoot"></div>
       </div>
       <div class="kpi-card green">
         <div class="kpi-header"><div class="kpi-icon green">😊</div><span class="kpi-label">CSAT</span></div>
         <div class="kpi-value green" id="kpiCsat">—</div>
-        <div class="kpi-delta" id="kpiCsatDelta"></div>
+        <div class="kpi-row"><span class="kpi-delta" id="kpiCsatDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiCsatAnt">—</b></span></div>
+        <div class="kpi-foot" id="kpiCsatFoot"></div>
       </div>
       <div class="kpi-card indigo">
         <div class="kpi-header"><div class="kpi-icon indigo">✅</div><span class="kpi-label">Resolvidos</span></div>
         <div class="kpi-value indigo" id="kpiResolvidos">—</div>
-        <div class="kpi-delta" id="kpiResolvidosDelta"></div>
-      </div>
-      <div class="kpi-card purple">
-        <div class="kpi-header"><div class="kpi-icon purple">🤝</div><span class="kpi-label">Engajamento</span></div>
-        <div class="kpi-value purple" id="kpiEngajamento">—</div>
-        <div class="kpi-delta" id="kpiEngajamentoDelta"></div>
+        <div class="kpi-row"><span class="kpi-delta" id="kpiResolvidosDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiResolvidosAnt">—</b></span></div>
+        <div class="kpi-foot" id="kpiResolvidosFoot"></div>
       </div>
     </div>
 
@@ -369,9 +370,9 @@
 
 </main>
 
-<script src="js/config.js?v=10"></script>
-<script src="js/kpis.js?v=10"></script>
-<script src="js/api.js?v=10"></script>
-<script src="js/app.js?v=10"></script>
+<script src="js/config.js?v=11"></script>
+<script src="js/kpis.js?v=11"></script>
+<script src="js/api.js?v=11"></script>
+<script src="js/app.js?v=11"></script>
 </body>
 </html>
