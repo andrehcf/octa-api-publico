@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=4">
+<link rel="stylesheet" href="css/style.css?v=5">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -186,6 +186,17 @@
 
   <!-- ═══ SEÇÃO: DIA X HORA ═══ -->
   <section class="section" id="sec-diahora">
+    <div class="chart-grid full">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Série temporal — por hora</div>
+            <div class="card-subtitle">Todos os indicadores por hora do dia (BRT), no período selecionado</div>
+          </div>
+        </div>
+        <div class="chart-wrap xtall"><canvas id="chartSerieHora"></canvas></div>
+      </div>
+    </div>
     <div class="chart-grid full">
       <div class="card">
         <div class="card-header">
@@ -397,9 +408,9 @@
 
 </main>
 
-<script src="js/config.js?v=4"></script>
-<script src="js/kpis.js?v=4"></script>
-<script src="js/api.js?v=4"></script>
-<script src="js/app.js?v=4"></script>
+<script src="js/config.js?v=5"></script>
+<script src="js/kpis.js?v=5"></script>
+<script src="js/api.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
 </body>
 </html>

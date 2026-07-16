@@ -254,6 +254,8 @@
     // Heatmap DOW × hora
     const grade = Array.from({ length: 7 }, () => Array(24).fill(0));
     const tmePorHora = Array.from({ length: 24 }, () => ({ soma: 0, n: 0 }));
+    const tmaPorHora = Array.from({ length: 24 }, () => ({ soma: 0, n: 0 }));
+    const csatPorHora = Array.from({ length: 24 }, () => ({ resp: 0, sat: 0, rsim: 0, rtot: 0 }));
     const volPorHora = Array(24).fill(0);
     for (const r of linhas) {
       const dow = new Date(r.dia + "T00:00:00").getDay();
@@ -261,6 +263,13 @@
       volPorHora[r.hora] += r.volume;
       tmePorHora[r.hora].soma += r.tme_soma_seg || 0;
       tmePorHora[r.hora].n += r.tme_n || 0;
+      tmaPorHora[r.hora].soma += r.tma_soma_seg || 0;
+      tmaPorHora[r.hora].n += r.tma_n || 0;
+      const c = csatPorHora[r.hora];
+      c.resp += r.csat_respondidos || 0;
+      c.sat += r.csat_satisfeitos || 0;
+      c.rsim += r.resolvidos_sim || 0;
+      c.rtot += r.resolvidos_total || 0;
     }
     const maxCell = Math.max(1, ...grade.flat());
     const DOWS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -296,6 +305,56 @@
         }],
       },
       options: opts({ y: { beginAtZero: true } }),
+    });
+
+    // ── Série temporal combinada (por hora): Volume · TMA · TME · CSAT · Resolvidos · Engajamento ──
+    // 3 eixos: Volume (esq.), Minutos (dir.), % (dir. externa). Só as horas com volume.
+    let hIni = 24, hFim = -1;
+    for (let h = 0; h < 24; h++) if (volPorHora[h] > 0) { if (h < hIni) hIni = h; if (h > hFim) hFim = h; }
+    if (hFim < hIni) { hIni = 0; hFim = 23; }
+    const hs = [];
+    for (let h = hIni; h <= hFim; h++) hs.push(h);
+    const pctH = (a, b) => (b ? 100 * a / b : null);
+    const minH = (o) => (o.n ? o.soma / o.n / 60 : null);
+    novoChart("chartSerieHora", {
+      type: "line",
+      data: {
+        labels: hs.map((h) => `${h}h`),
+        datasets: [
+          { label: "Volume", data: hs.map((h) => volPorHora[h]),
+            borderColor: "#818cf8", backgroundColor: "rgba(129,140,248,0.12)", fill: true,
+            tension: 0.4, pointRadius: 0, borderWidth: 2, yAxisID: "yVol" },
+          { label: "TMA (min)", data: hs.map((h) => minH(tmaPorHora[h])),
+            borderColor: "#f59e0b", tension: 0.4, pointRadius: 0, borderWidth: 2, yAxisID: "yMin" },
+          { label: "TME (min)", data: hs.map((h) => minH(tmePorHora[h])),
+            borderColor: "#2dd4bf", borderDash: [5, 4], tension: 0.4, pointRadius: 0, borderWidth: 2, yAxisID: "yMin" },
+          { label: "CSAT %", data: hs.map((h) => pctH(csatPorHora[h].sat, csatPorHora[h].resp)),
+            borderColor: "#22d3ee", borderDash: [5, 4], tension: 0.4, pointRadius: 0, borderWidth: 2, yAxisID: "yPct" },
+          { label: "Resolvidos %", data: hs.map((h) => pctH(csatPorHora[h].rsim, csatPorHora[h].rtot)),
+            borderColor: "#4ade80", borderDash: [5, 4], tension: 0.4, pointRadius: 0, borderWidth: 2, yAxisID: "yPct" },
+          { label: "Engajamento %", data: hs.map((h) => pctH(csatPorHora[h].resp, volPorHora[h])),
+            borderColor: "#a78bfa", borderDash: [2, 3], tension: 0.4, pointRadius: 0, borderWidth: 2, yAxisID: "yPct" },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: true, position: "top",
+            labels: { boxWidth: 12, usePointStyle: true, pointStyle: "line", color: "#8893aa", font: { size: 11 } } },
+          tooltip: { mode: "index", intersect: false },
+        },
+        scales: {
+          x: { grid: { color: GRID } },
+          yVol: { position: "left", beginAtZero: true, grid: { color: GRID },
+            title: { display: true, text: "Volume", color: "#818cf8", font: { size: 10 } } },
+          yMin: { position: "right", beginAtZero: true, grid: { drawOnChartArea: false },
+            title: { display: true, text: "Minutos", color: "#f59e0b", font: { size: 10 } } },
+          yPct: { position: "right", beginAtZero: true, max: 100, grid: { drawOnChartArea: false },
+            ticks: { callback: (v) => v + "%" },
+            title: { display: true, text: "%", color: "#22d3ee", font: { size: 10 } } },
+        },
+      },
     });
   }
 

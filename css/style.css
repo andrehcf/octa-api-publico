@@ -406,6 +406,7 @@ body {
 
 .chart-wrap { position: relative; height: 170px; }
 .chart-wrap.tall { height: 230px; }
+.chart-wrap.xtall { height: 300px; }
 
 /* ── Bar list (Top categorias/formulários) ── */
 .bar-list { display: flex; flex-direction: column; gap: 11px; }
