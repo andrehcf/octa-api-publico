@@ -190,44 +190,6 @@
       options: opts({ y: { beginAtZero: true } }),
     });
 
-    novoChart("chartQualidade", {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          { label: "Abandono %", data: linhas.map((r) => r.total_fechados ? 100 * r.fechados_sem_atender / r.total_fechados : null),
-            borderColor: "#f87171", tension: 0.4, pointRadius: 2, yAxisID: "y1" },
-          { label: "CSAT %", data: linhas.map((r) => r.csat_respondidos ? 100 * r.csat_satisfeitos / r.csat_respondidos : null),
-            borderColor: "#34d399", tension: 0.4, pointRadius: 2, yAxisID: "y2" },
-          { label: "Engajamento %", data: linhas.map((r) => r.volume_atendido ? 100 * r.csat_respondidos / r.volume_atendido : null),
-            borderColor: "#fbbf24", tension: 0.4, pointRadius: 2, yAxisID: "y1" },
-        ],
-      },
-      options: opts({
-        y1: { position: "left", grid: { color: GRID }, beginAtZero: true },
-        y2: { position: "right", grid: { drawOnChartArea: false }, min: 0, max: 100 },
-      }, true),
-    });
-
-    // Volume mensal — janela completa, fila selecionada
-    const porMes = {};
-    for (const r of linhasFilaPorDia(estado.fila, p.minDia, p.fim)) {
-      const mes = r.dia.slice(0, 7) + "-01";
-      porMes[mes] = (porMes[mes] || 0) + r.volume_atendido;
-    }
-    const meses = Object.keys(porMes).sort();
-    novoChart("chartVolumeMes", {
-      type: "bar",
-      data: {
-        labels: meses.map(KPIS.fmtMes),
-        datasets: [{
-          data: meses.map((m) => porMes[m]),
-          backgroundColor: "rgba(79,124,247,0.8)", borderRadius: 7, borderSkipped: false,
-        }],
-      },
-      options: opts({ y: { beginAtZero: true } }),
-    });
-
     // Top 5 categorias (meses que intersectam o período; todas as filas)
     const mesesSel = mesesDoPeriodo(p);
     const porCat = {};
@@ -242,6 +204,36 @@
         <div class="bar-label-row"><strong title="${nome}">${nome}</strong><span>${KPIS.fmtInt(vol)}</span></div>
         <div class="bar-track"><div class="bar-fill" style="width:${Math.round(100 * vol / maxVol)}%"></div></div>
       </div>`).join("") || `<div class="empty-note">Sem dados no período</div>`;
+  }
+
+  // Distribuição de TMA (mês mais recente dentro do período) — histograma + percentis,
+  // no estilo da página de Indicadores do octa-api. Dado: agg_tma_distribuicao_mes.
+  function renderDistTma() {
+    const p = periodo();
+    if (!p) return;
+    const mesesSel = mesesDoPeriodo(p);
+    const dist = estado.dados.tmaDistMes || [];
+    let row = null;
+    for (const r of dist) if (mesesSel.has(r.mes)) row = r;   // mais recente no período
+    if (!row) row = dist.length ? dist[dist.length - 1] : null;
+    const stats = $("statsTmaDist");
+    if (!row) { if (stats) stats.textContent = "Sem dados no período"; return; }
+    const buckets = typeof row.buckets === "string" ? JSON.parse(row.buckets) : row.buckets;
+    const min1 = (x) => (x == null ? "—" : x.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " min");
+    if (stats) stats.innerHTML =
+      `${KPIS.fmtMes(row.mes)} · Média <b>${min1(row.media_min)}</b> · P50 <b>${min1(row.p50_min)}</b> · ` +
+      `P90 <b>${min1(row.p90_min)}</b> · P95 <b>${min1(row.p95_min)}</b> · n <b>${KPIS.fmtInt(row.n)}</b>`;
+    novoChart("chartTmaDistP", {
+      type: "bar",
+      data: {
+        labels: buckets.map((b) => b.label),
+        datasets: [{
+          data: buckets.map((b) => b.count),
+          backgroundColor: "rgba(139,92,246,0.8)", borderRadius: 7, borderSkipped: false,
+        }],
+      },
+      options: opts({ y: { beginAtZero: true } }),
+    });
   }
 
   // ══════════════ DIA X HORA ══════════════
@@ -590,7 +582,7 @@
   }
 
   const RENDERS = {
-    performance: () => { renderPerformance(); renderDiaHora(); },
+    performance: () => { renderPerformance(); renderDiaHora(); renderDistTma(); },
     tickets: renderTickets,
     categorias: renderCategorias,
     ranking: renderRanking,
