@@ -22,8 +22,10 @@
   const GRID = "rgba(255,255,255,0.05)";
 
   function novoChart(id, cfg) {
+    const el = $(id);
+    if (!el) return;   // canvas ausente no HTML (layout enxuto) → ignora
     if (charts[id]) charts[id].destroy();
-    charts[id] = new Chart($(id), cfg);
+    charts[id] = new Chart(el, cfg);
   }
 
   // ── Período selecionado ──
@@ -159,7 +161,8 @@
     $("kpiEngajamentoDelta").innerHTML = KPIS.deltaHtml(k.engajamentoPct, kAnt.engajamentoPct, { sufixo: " p.p." });
 
     const labels = linhas.map((r) => KPIS.fmtDiaCurto(r.dia));
-    $("subVolumeDia").textContent =
+    const subVol = $("subVolumeDia");
+    if (subVol) subVol.textContent =
       `${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)} — ${filaLabel(estado.fila)}`;
 
     novoChart("chartVolumeDia", {
@@ -199,7 +202,8 @@
     }
     const top = Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 5);
     const maxVol = top.length ? top[0][1] : 1;
-    $("topCategorias").innerHTML = top.map(([nome, vol]) => `
+    const elCat = $("topCategorias");
+    if (elCat) elCat.innerHTML = top.map(([nome, vol]) => `
       <div class="bar-item">
         <div class="bar-label-row"><strong title="${nome}">${nome}</strong><span>${KPIS.fmtInt(vol)}</span></div>
         <div class="bar-track"><div class="bar-fill" style="width:${Math.round(100 * vol / maxVol)}%"></div></div>
@@ -276,7 +280,8 @@
           style="${v ? `background:rgba(79,124,247,${alpha.toFixed(2)})` : ""}"></div>`;
       }
     }
-    $("heatmap").innerHTML = html;
+    const elHm = $("heatmap");
+    if (elHm) elHm.innerHTML = html;
 
     const horas = Array.from({ length: 24 }, (_, h) => h);
     novoChart("chartVolumeHora", {

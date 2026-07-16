@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=8">
+<link rel="stylesheet" href="css/style.css?v=9">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -122,41 +122,6 @@
       </div>
     </div>
 
-    <div class="chart-grid">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Volume Diário de Atendimentos</div>
-            <div class="card-subtitle" id="subVolumeDia"></div>
-          </div>
-        </div>
-        <div class="chart-wrap"><canvas id="chartVolumeDia"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Evolução do Tempo de Atendimento</div>
-            <div class="card-subtitle">TME e TMA médios por dia (minutos)</div>
-          </div>
-        </div>
-        <div class="chart-wrap"><canvas id="chartTempoDia"></canvas></div>
-        <div class="legend">
-          <div class="legend-item"><div class="legend-dot" style="background:#22d3ee"></div> TME (min)</div>
-          <div class="legend-item"><div class="legend-dot" style="background:#14b8a6"></div> TMA (min)</div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Top 5 Categorias</div>
-            <div class="card-subtitle" id="subTopCat">Volume no período</div>
-          </div>
-        </div>
-        <div class="bar-list" id="topCategorias"></div>
-      </div>
-    </div>
-
-    <!-- ─── movido de Dia × Hora ─── -->
     <div class="chart-grid full">
       <div class="card">
         <div class="card-header">
@@ -166,17 +131,6 @@
           </div>
         </div>
         <div class="chart-wrap xtall"><canvas id="chartSerieHora"></canvas></div>
-      </div>
-    </div>
-    <div class="chart-grid full">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Heatmap — Dia da Semana × Hora</div>
-            <div class="card-subtitle">Volume de atendimentos (todas as filas)</div>
-          </div>
-        </div>
-        <div class="heatmap" id="heatmap"></div>
       </div>
     </div>
     <div class="chart-grid half">
@@ -391,9 +345,9 @@
 
 </main>
 
-<script src="js/config.js?v=8"></script>
-<script src="js/kpis.js?v=8"></script>
-<script src="js/api.js?v=8"></script>
-<script src="js/app.js?v=8"></script>
+<script src="js/config.js?v=9"></script>
+<script src="js/kpis.js?v=9"></script>
+<script src="js/api.js?v=9"></script>
+<script src="js/app.js?v=9"></script>
 </body>
 </html>
