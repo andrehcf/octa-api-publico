@@ -29,7 +29,7 @@ const API = (() => {
   async function carregarTudo() {
     const [
       chatsDia, chatsHora, ticketsDia, ticketsMes, ticketsFormMes, ticketsStatusMes,
-      agentesMes, categoriasMes, tmaDistMes, reincMes, syncInfo,
+      agentesMes, categoriasDia, tmaDistMes, reincMes, syncInfo,
     ] = await Promise.all([
       tabela("agg_chats_dia", "dia"),
       tabela("agg_chats_hora", "dia"),
@@ -38,14 +38,14 @@ const API = (() => {
       tabela("agg_tickets_form_mes", "mes"),
       tabela("agg_tickets_status_mes", "mes"),
       tabela("agg_agentes_mes", "mes"),
-      tabela("agg_categorias_mes", "mes"),
+      tabela("agg_categorias_dia", "dia"),
       tabela("agg_tma_distribuicao_mes", "mes"),
       tabela("agg_reincidencia_mes", "mes"),
       tabela("sync_info", "id"),
     ]);
     return {
       chatsDia, chatsHora, ticketsDia, ticketsMes, ticketsFormMes, ticketsStatusMes,
-      agentesMes, categoriasMes, tmaDistMes, reincMes,
+      agentesMes, categoriasDia, tmaDistMes, reincMes,
       syncInfo: syncInfo[0] || null,
     };
   }

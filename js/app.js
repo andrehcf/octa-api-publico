@@ -212,22 +212,6 @@
       },
       options: opts({ y: { beginAtZero: true } }),
     });
-
-    // Top 5 categorias (meses que intersectam o período; todas as filas)
-    const mesesSel = mesesDoPeriodo(p);
-    const porCat = {};
-    for (const r of estado.dados.categoriasMes) {
-      if (!mesesSel.has(r.mes)) continue;
-      porCat[r.categoria_nome] = (porCat[r.categoria_nome] || 0) + r.volume;
-    }
-    const top = Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    const maxVol = top.length ? top[0][1] : 1;
-    const elCat = $("topCategorias");
-    if (elCat) elCat.innerHTML = top.map(([nome, vol]) => `
-      <div class="bar-item">
-        <div class="bar-label-row"><strong title="${nome}">${nome}</strong><span>${KPIS.fmtInt(vol)}</span></div>
-        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(100 * vol / maxVol)}%"></div></div>
-      </div>`).join("") || `<div class="empty-note">Sem dados no período</div>`;
   }
 
   // Distribuição de TMA (mês mais recente dentro do período) — histograma + percentis,
@@ -260,35 +244,44 @@
     });
   }
 
-  // Tabela de categorias na tela de Performance (mesma agregação da seção "Por Categoria").
-  function renderCategoriasPerf() {
-    const tabela = $("tabelaCategoriasP");
+  // Preenche uma tabela de categorias somando o período a partir de agg_categorias_dia.
+  // TMA: mediana exata quando o filtro é um único dia; senão média ponderada.
+  function preencherCategorias(tabelaId, subId, limite) {
+    const tabela = $(tabelaId);
     if (!tabela) return;
     const p = periodo();
     if (!p) return;
-    const mesesSel = mesesDoPeriodo(p);
+    const umDia = p.inicio === p.fim;
     const porCat = {};
-    for (const r of estado.dados.categoriasMes) {
-      if (!mesesSel.has(r.mes)) continue;
+    for (const r of estado.dados.categoriasDia) {
+      if (!entre(r.dia, p.inicio, p.fim)) continue;
       const c = porCat[r.categoria_nome] ||
-        (porCat[r.categoria_nome] = { volume: 0, resp: 0, satis: 0, tma: null, tmaMes: "" });
+        (porCat[r.categoria_nome] = { volume: 0, resp: 0, satis: 0, tmaSoma: 0, tmaN: 0, mediana: null });
       c.volume += r.volume;
       c.resp += r.csat_respondidos;
       c.satis += r.csat_satisfeitos;
-      if (r.mes > c.tmaMes && r.tma_mediana_seg !== null) { c.tmaMes = r.mes; c.tma = r.tma_mediana_seg; }
+      c.tmaSoma += r.tma_soma_seg || 0;
+      c.tmaN += r.tma_n || 0;
+      if (umDia) c.mediana = r.tma_mediana_seg;   // dia único → mediana exata (1 linha/cat)
     }
-    const cats = Object.entries(porCat).sort((a, b) => b[1].volume - a[1].volume).slice(0, 20);
-    const sub = $("subCategoriasP");
+    const cats = Object.entries(porCat).sort((a, b) => b[1].volume - a[1].volume).slice(0, limite);
+    const sub = $(subId);
     if (sub) sub.textContent =
       `Top ${cats.length} categorias — ${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)}`;
-    tabela.querySelector("tbody").innerHTML = cats.map(([nome, c]) => `
-      <tr>
+    tabela.querySelector("tbody").innerHTML = cats.map(([nome, c]) => {
+      const tma = (umDia && c.mediana != null) ? c.mediana : (c.tmaN ? c.tmaSoma / c.tmaN : null);
+      return `<tr>
         <td>${nome}</td>
         <td class="num">${KPIS.fmtInt(c.volume)}</td>
-        <td class="num">${KPIS.fmtDuracao(c.tma)}</td>
+        <td class="num">${KPIS.fmtDuracao(tma)}</td>
         <td class="num">${c.resp ? KPIS.fmtPct(100 * c.satis / c.resp) : "—"}</td>
         <td class="num">${KPIS.fmtInt(c.resp)}</td>
-      </tr>`).join("") || `<tr><td colspan="5" class="empty-note">Sem dados no período</td></tr>`;
+      </tr>`;
+    }).join("") || `<tr><td colspan="5" class="empty-note">Sem dados no período</td></tr>`;
+  }
+
+  function renderCategoriasPerf() {
+    preencherCategorias("tabelaCategoriasP", "subCategoriasP", 10);
   }
 
   // ══════════════ DIA X HORA ══════════════
@@ -522,33 +515,7 @@
   function renderCategorias() {
     const p = periodo();
     if (!p) return;
-    const mesesSel = mesesDoPeriodo(p);
-
-    // Agrega volume/CSAT entre meses; TMA mediana = do mês mais recente da categoria
-    const porCat = {};
-    for (const r of estado.dados.categoriasMes) {
-      if (!mesesSel.has(r.mes)) continue;
-      const c = porCat[r.categoria_nome] ||
-        (porCat[r.categoria_nome] = { volume: 0, resp: 0, satis: 0, tma: null, tmaMes: "" });
-      c.volume += r.volume;
-      c.resp += r.csat_respondidos;
-      c.satis += r.csat_satisfeitos;
-      if (r.mes > c.tmaMes && r.tma_mediana_seg !== null) {
-        c.tmaMes = r.mes;
-        c.tma = r.tma_mediana_seg;
-      }
-    }
-    const cats = Object.entries(porCat).sort((a, b) => b[1].volume - a[1].volume).slice(0, 20);
-    $("subCategorias").textContent =
-      `Top ${cats.length} categorias — ${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)} (TMA mediana do mês mais recente)`;
-    $("tabelaCategorias").querySelector("tbody").innerHTML = cats.map(([nome, c]) => `
-      <tr>
-        <td>${nome}</td>
-        <td class="num">${KPIS.fmtInt(c.volume)}</td>
-        <td class="num">${KPIS.fmtDuracao(c.tma)}</td>
-        <td class="num">${c.resp ? KPIS.fmtPct(100 * c.satis / c.resp) : "—"}</td>
-        <td class="num">${KPIS.fmtInt(c.resp)}</td>
-      </tr>`).join("") || `<tr><td colspan="5" class="empty-note">Sem dados no período</td></tr>`;
+    preencherCategorias("tabelaCategorias", "subCategorias", 20);
 
     // Distribuição de TMA — mês mais recente disponível
     const dist = estado.dados.tmaDistMes;
