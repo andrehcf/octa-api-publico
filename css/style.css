@@ -147,20 +147,17 @@ body {
 
 .page-title h1 { font-size: 20px; font-weight: 700; letter-spacing: -.3px; line-height: 1.2; }
 .page-title p  { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
-.topbar-sync {
-  display: inline-flex;
+
+/* Bloco de sincronização — canto inferior esquerdo (rodapé da sidebar) */
+.sync-status {
+  display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-top: 6px;
-  font-size: 11px;
-  color: var(--muted);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 10px;
+  gap: 9px;
+  margin-bottom: 12px;
 }
-.topbar-sync .sync-line { display: flex; align-items: center; gap: 6px; }
-.topbar-sync b { color: var(--text); font-weight: 600; }
+.sync-status .sync-line { line-height: 1.4; }
+.sync-status .sync-head { display: flex; align-items: center; gap: 6px; }
+.sync-status b { display: block; padding-left: 13px; color: var(--text); font-weight: 600; }
 
 .topbar-right {
   display: flex;

@@ -667,30 +667,30 @@
 
   function renderStatus() {
     const si = estado.dados.syncInfo;
-    const topo = $("topbarSync");
-    if (!si) {
-      $("statusTexto").textContent = "Sem info de sync";
-      $("footerAtualizado").textContent = "";
-      if (topo) topo.innerHTML = "";
-      return;
-    }
+    const box = $("syncStatus");
     const fmtDt = (iso) => (iso
       ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
       : "—");
     const stale12 = (iso) => iso && (Date.now() - new Date(iso).getTime()) / 3600000 > 12;
 
-    const fmt = fmtDt(si.executado_em);           // banco local → dashboard (nosso sync)
+    if (!si) {
+      if (box) box.textContent = "Sem info de sync";
+      $("footerAtualizado").textContent = "";
+      return;
+    }
+
+    const fmt = fmtDt(si.executado_em);           // banco local → Supabase (nosso sync)
     const fmtOrigem = fmtDt(si.origem_sync_em);   // API Octadesk → banco local (sync do octa-api)
-    $("statusDot").className = "status-dot" + (stale12(si.executado_em) ? " stale" : "");
-    $("statusTexto").textContent = `Atualizado ${fmt}`;
     $("footerAtualizado").textContent =
       `Dados atualizados em ${fmt} · janela de ${si.janela_dias} dias · atualização automática a cada 5 min`;
-    if (topo) {
+    if (box) {
       const linha = (lbl, valor, iso) =>
-        `<div class="sync-line"><span class="status-dot${stale12(iso) ? " stale" : ""}"></span> ${lbl}: <b>${valor}</b></div>`;
-      topo.innerHTML =
-        linha("API Octadesk → banco local", fmtOrigem, si.origem_sync_em) +
-        linha("Banco local → dashboard", fmt, si.executado_em);
+        `<div class="sync-line"><span class="sync-head">` +
+        `<span class="status-dot${stale12(iso) ? " stale" : ""}"></span> ${lbl}</span>` +
+        `<b>${valor}</b></div>`;
+      box.innerHTML =
+        linha("Banco Oficial:", fmtOrigem, si.origem_sync_em) +
+        linha("Banco Supabase:", fmt, si.executado_em);
     }
   }
 
@@ -714,7 +714,7 @@
       $("errorBanner").textContent =
         "Não foi possível carregar os dados. Tente novamente em instantes. (" + e.message + ")";
       $("errorBanner").classList.remove("hidden");
-      $("statusTexto").textContent = "Erro ao carregar";
+      $("syncStatus").textContent = "Erro ao carregar";
     }
   }
 
