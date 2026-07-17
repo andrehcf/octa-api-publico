@@ -667,18 +667,23 @@
 
   function renderStatus() {
     const si = estado.dados.syncInfo;
+    const topo = $("topbarSync");
     if (!si) {
       $("statusTexto").textContent = "Sem info de sync";
       $("footerAtualizado").textContent = "";
+      if (topo) topo.innerHTML = "";
       return;
     }
     const dt = new Date(si.executado_em);
     const fmt = dt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
     const horasAtras = (Date.now() - dt.getTime()) / 3600000;
-    $("statusDot").className = "status-dot" + (horasAtras > 12 ? " stale" : "");
+    const stale = horasAtras > 12;
+    $("statusDot").className = "status-dot" + (stale ? " stale" : "");
     $("statusTexto").textContent = `Atualizado ${fmt}`;
     $("footerAtualizado").textContent =
       `Dados atualizados em ${fmt} · janela de ${si.janela_dias} dias · atualização automática a cada 5 min`;
+    if (topo) topo.innerHTML =
+      `<span class="status-dot${stale ? " stale" : ""}"></span> Última sincronização do banco local: <b>${fmt}</b>`;
   }
 
   function popularFilas() {
