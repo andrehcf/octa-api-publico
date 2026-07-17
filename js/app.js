@@ -236,10 +236,11 @@
     });
   }
 
-  // Distribuição de TMA (mês mais recente dentro do período), FILTRADA pela fila —
-  // histograma + percentis, no estilo do octa-api. Dado: agg_tma_distribuicao_mes
-  // (por fila). Histograma/n/média somam os membros (exatos, aditivos); percentis
-  // são exatos p/ fila única e média ponderada por n p/ fila combinada (base+plantão).
+  // Distribuição de TMA do PERÍODO selecionado, FILTRADA pela fila — histograma +
+  // percentis, no estilo do octa-api. Dado: agg_tma_distribuicao_dia (por dia e fila).
+  // Histograma/n/média somam os dias do período × membros da fila (aditivos, exatos);
+  // percentis são exatos p/ 1 linha (dia único + fila única) e média ponderada por n
+  // nos demais casos (multi-dia ou fila combinada).
   function renderDistTma() {
     const p = periodo();
     if (!p) return;
@@ -251,14 +252,10 @@
         options: opts({ y: { beginAtZero: true } }) });
     };
 
-    const mesesSel = mesesDoPeriodo(p);
     const membros = new Set(membrosDaFila(estado.fila));
-    const doFiltro = (estado.dados.tmaDistMes || [])
-      .filter((r) => membros.has(r.fila_slug) && mesesSel.has(r.mes));
-    if (!doFiltro.length) return semDados();
-
-    const mesAlvo = doFiltro.reduce((m, r) => (r.mes > m ? r.mes : m), doFiltro[0].mes);
-    const rows = doFiltro.filter((r) => r.mes === mesAlvo);
+    const rows = (estado.dados.tmaDistDia || [])
+      .filter((r) => membros.has(r.fila_slug) && entre(r.dia, p.inicio, p.fim));
+    if (!rows.length) return semDados();
 
     const base = typeof rows[0].buckets === "string" ? JSON.parse(rows[0].buckets) : rows[0].buckets;
     const labels = base.map((b) => b.label);
@@ -276,13 +273,16 @@
     }
     if (!n) return semDados();
     const media = mediaSoma / n;
-    const unico = rows.length === 1;   // fila única → percentis exatos do banco
+    const unico = rows.length === 1;   // 1 dia + 1 fila → percentis exatos do banco
     const p50 = unico ? rows[0].p50_min : p50Soma / n;
     const p90 = unico ? rows[0].p90_min : p90Soma / n;
     const p95 = unico ? rows[0].p95_min : p95Soma / n;
 
+    const periodoLbl = p.inicio === p.fim
+      ? KPIS.fmtDiaCurto(p.inicio)
+      : `${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)}`;
     if (stats) stats.innerHTML =
-      `${KPIS.fmtMes(mesAlvo)} · ${filaLabel(estado.fila)} · Média <b>${min1(media)}</b> · ` +
+      `${periodoLbl} · ${filaLabel(estado.fila)} · Média <b>${min1(media)}</b> · ` +
       `P50 <b>${min1(p50)}</b> · P90 <b>${min1(p90)}</b> · P95 <b>${min1(p95)}</b> · n <b>${KPIS.fmtInt(n)}</b>`;
     novoChart("chartTmaDistP", {
       type: "bar",
