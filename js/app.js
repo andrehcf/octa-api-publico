@@ -28,6 +28,28 @@
     charts[id] = new Chart(el, cfg);
   }
 
+  // Plugin inline (sem dependência externa): escreve o valor acima de cada barra.
+  const rotuloBarras = {
+    id: "rotuloBarras",
+    afterDatasetsDraw(chart) {
+      const meta = chart.getDatasetMeta(0);
+      if (!meta || !meta.data) return;
+      const ctx = chart.ctx;
+      const cor = getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#e6ebf5";
+      ctx.save();
+      ctx.font = "600 11px system-ui, -apple-system, sans-serif";
+      ctx.fillStyle = cor;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      meta.data.forEach((bar, i) => {
+        const v = chart.data.datasets[0].data[i];
+        if (!v) return;   // não rotula zero/nulo
+        ctx.fillText(Number(v).toLocaleString("pt-BR"), bar.x, bar.y - 4);
+      });
+      ctx.restore();
+    },
+  };
+
   // ── Período selecionado ──
   // fim = último dia com dados; início = fim - dias + 1 (ou início da janela).
   function periodo() {
@@ -214,33 +236,65 @@
     });
   }
 
-  // Distribuição de TMA (mês mais recente dentro do período) — histograma + percentis,
-  // no estilo da página de Indicadores do octa-api. Dado: agg_tma_distribuicao_mes.
+  // Distribuição de TMA (mês mais recente dentro do período), FILTRADA pela fila —
+  // histograma + percentis, no estilo do octa-api. Dado: agg_tma_distribuicao_mes
+  // (por fila). Histograma/n/média somam os membros (exatos, aditivos); percentis
+  // são exatos p/ fila única e média ponderada por n p/ fila combinada (base+plantão).
   function renderDistTma() {
     const p = periodo();
     if (!p) return;
-    const mesesSel = mesesDoPeriodo(p);
-    const dist = estado.dados.tmaDistMes || [];
-    let row = null;
-    for (const r of dist) if (mesesSel.has(r.mes)) row = r;   // mais recente no período
-    if (!row) row = dist.length ? dist[dist.length - 1] : null;
     const stats = $("statsTmaDist");
-    if (!row) { if (stats) stats.textContent = "Sem dados no período"; return; }
-    const buckets = typeof row.buckets === "string" ? JSON.parse(row.buckets) : row.buckets;
     const min1 = (x) => (x == null ? "—" : x.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " min");
+    const semDados = () => {
+      if (stats) stats.textContent = "Sem dados no período";
+      novoChart("chartTmaDistP", { type: "bar", data: { labels: [], datasets: [{ data: [] }] },
+        options: opts({ y: { beginAtZero: true } }) });
+    };
+
+    const mesesSel = mesesDoPeriodo(p);
+    const membros = new Set(membrosDaFila(estado.fila));
+    const doFiltro = (estado.dados.tmaDistMes || [])
+      .filter((r) => membros.has(r.fila_slug) && mesesSel.has(r.mes));
+    if (!doFiltro.length) return semDados();
+
+    const mesAlvo = doFiltro.reduce((m, r) => (r.mes > m ? r.mes : m), doFiltro[0].mes);
+    const rows = doFiltro.filter((r) => r.mes === mesAlvo);
+
+    const base = typeof rows[0].buckets === "string" ? JSON.parse(rows[0].buckets) : rows[0].buckets;
+    const labels = base.map((b) => b.label);
+    const counts = base.map(() => 0);
+    let n = 0, mediaSoma = 0, p50Soma = 0, p90Soma = 0, p95Soma = 0;
+    for (const r of rows) {
+      const bs = typeof r.buckets === "string" ? JSON.parse(r.buckets) : r.buckets;
+      bs.forEach((b, i) => { counts[i] += b.count || 0; });
+      const ni = r.n || 0;
+      n += ni;
+      if (r.media_min != null) mediaSoma += r.media_min * ni;
+      if (r.p50_min != null) p50Soma += r.p50_min * ni;
+      if (r.p90_min != null) p90Soma += r.p90_min * ni;
+      if (r.p95_min != null) p95Soma += r.p95_min * ni;
+    }
+    if (!n) return semDados();
+    const media = mediaSoma / n;
+    const unico = rows.length === 1;   // fila única → percentis exatos do banco
+    const p50 = unico ? rows[0].p50_min : p50Soma / n;
+    const p90 = unico ? rows[0].p90_min : p90Soma / n;
+    const p95 = unico ? rows[0].p95_min : p95Soma / n;
+
     if (stats) stats.innerHTML =
-      `${KPIS.fmtMes(row.mes)} · Média <b>${min1(row.media_min)}</b> · P50 <b>${min1(row.p50_min)}</b> · ` +
-      `P90 <b>${min1(row.p90_min)}</b> · P95 <b>${min1(row.p95_min)}</b> · n <b>${KPIS.fmtInt(row.n)}</b>`;
+      `${KPIS.fmtMes(mesAlvo)} · ${filaLabel(estado.fila)} · Média <b>${min1(media)}</b> · ` +
+      `P50 <b>${min1(p50)}</b> · P90 <b>${min1(p90)}</b> · P95 <b>${min1(p95)}</b> · n <b>${KPIS.fmtInt(n)}</b>`;
     novoChart("chartTmaDistP", {
       type: "bar",
       data: {
-        labels: buckets.map((b) => b.label),
+        labels,
         datasets: [{
-          data: buckets.map((b) => b.count),
+          data: counts,
           backgroundColor: "rgba(139,92,246,0.8)", borderRadius: 7, borderSkipped: false,
         }],
       },
-      options: opts({ y: { beginAtZero: true } }),
+      options: opts({ y: { beginAtZero: true, grace: "12%" } }),
+      plugins: [rotuloBarras],
     });
   }
 
