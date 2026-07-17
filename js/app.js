@@ -252,24 +252,26 @@
     const p = periodo();
     if (!p) return;
     const umDia = p.inicio === p.fim;
+    const membros = new Set(membrosDaFila(estado.fila));
     const porCat = {};
     for (const r of estado.dados.categoriasDia) {
-      if (!entre(r.dia, p.inicio, p.fim)) continue;
+      if (!membros.has(r.fila_slug) || !entre(r.dia, p.inicio, p.fim)) continue;
       const c = porCat[r.categoria_nome] ||
-        (porCat[r.categoria_nome] = { volume: 0, resp: 0, satis: 0, tmaSoma: 0, tmaN: 0, mediana: null });
+        (porCat[r.categoria_nome] = { volume: 0, resp: 0, satis: 0, tmaSoma: 0, tmaN: 0, mediana: null, nRows: 0 });
       c.volume += r.volume;
       c.resp += r.csat_respondidos;
       c.satis += r.csat_satisfeitos;
       c.tmaSoma += r.tma_soma_seg || 0;
       c.tmaN += r.tma_n || 0;
-      if (umDia) c.mediana = r.tma_mediana_seg;   // dia único → mediana exata (1 linha/cat)
+      c.nRows += 1;
+      if (umDia) c.mediana = r.tma_mediana_seg;   // exata só se 1 linha (dia único + fila única)
     }
     const cats = Object.entries(porCat).sort((a, b) => b[1].volume - a[1].volume).slice(0, limite);
     const sub = $(subId);
     if (sub) sub.textContent =
       `Top ${cats.length} categorias — ${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)}`;
     tabela.querySelector("tbody").innerHTML = cats.map(([nome, c]) => {
-      const tma = (umDia && c.mediana != null) ? c.mediana : (c.tmaN ? c.tmaSoma / c.tmaN : null);
+      const tma = (umDia && c.nRows === 1 && c.mediana != null) ? c.mediana : (c.tmaN ? c.tmaSoma / c.tmaN : null);
       return `<tr>
         <td>${nome}</td>
         <td class="num">${KPIS.fmtInt(c.volume)}</td>
@@ -289,7 +291,8 @@
   function renderDiaHora() {
     const p = periodo();
     if (!p) return;
-    const linhas = estado.dados.chatsHora.filter((r) => entre(r.dia, p.inicio, p.fim));
+    const membrosH = new Set(membrosDaFila(estado.fila));
+    const linhas = estado.dados.chatsHora.filter((r) => membrosH.has(r.fila_slug) && entre(r.dia, p.inicio, p.fim));
 
     // Heatmap DOW × hora
     const grade = Array.from({ length: 7 }, () => Array(24).fill(0));
