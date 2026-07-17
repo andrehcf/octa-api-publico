@@ -149,16 +149,17 @@ body {
 .page-title p  { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .topbar-sync {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 3px;
   margin-top: 6px;
   font-size: 11px;
   color: var(--muted);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 4px 10px;
+  padding: 6px 10px;
 }
+.topbar-sync .sync-line { display: flex; align-items: center; gap: 6px; }
 .topbar-sync b { color: var(--text); font-weight: 600; }
 
 .topbar-right {

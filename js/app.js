@@ -674,16 +674,24 @@
       if (topo) topo.innerHTML = "";
       return;
     }
-    const dt = new Date(si.executado_em);
-    const fmt = dt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-    const horasAtras = (Date.now() - dt.getTime()) / 3600000;
-    const stale = horasAtras > 12;
-    $("statusDot").className = "status-dot" + (stale ? " stale" : "");
+    const fmtDt = (iso) => (iso
+      ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "—");
+    const stale12 = (iso) => iso && (Date.now() - new Date(iso).getTime()) / 3600000 > 12;
+
+    const fmt = fmtDt(si.executado_em);           // banco local → dashboard (nosso sync)
+    const fmtOrigem = fmtDt(si.origem_sync_em);   // API Octadesk → banco local (sync do octa-api)
+    $("statusDot").className = "status-dot" + (stale12(si.executado_em) ? " stale" : "");
     $("statusTexto").textContent = `Atualizado ${fmt}`;
     $("footerAtualizado").textContent =
       `Dados atualizados em ${fmt} · janela de ${si.janela_dias} dias · atualização automática a cada 5 min`;
-    if (topo) topo.innerHTML =
-      `<span class="status-dot${stale ? " stale" : ""}"></span> Última sincronização do banco local: <b>${fmt}</b>`;
+    if (topo) {
+      const linha = (lbl, valor, iso) =>
+        `<div class="sync-line"><span class="status-dot${stale12(iso) ? " stale" : ""}"></span> ${lbl}: <b>${valor}</b></div>`;
+      topo.innerHTML =
+        linha("API Octadesk → banco local", fmtOrigem, si.origem_sync_em) +
+        linha("Banco local → dashboard", fmt, si.executado_em);
+    }
   }
 
   function popularFilas() {
