@@ -519,26 +519,6 @@
     const p = periodo();
     if (!p) return;
     preencherCategorias("tabelaCategorias", "subCategorias", 20);
-
-    // Distribuição de TMA — mês mais recente disponível
-    const dist = estado.dados.tmaDistMes;
-    const ult = dist.length ? dist[dist.length - 1] : null;
-    if (ult) {
-      const buckets = typeof ult.buckets === "string" ? JSON.parse(ult.buckets) : ult.buckets;
-      $("subTmaDist").textContent =
-        `${KPIS.fmtMes(ult.mes)} — mediana ${Math.round(ult.p50_min)}min · p90 ${Math.round(ult.p90_min)}min · ${KPIS.fmtInt(ult.n)} chats`;
-      novoChart("chartTmaDist", {
-        type: "bar",
-        data: {
-          labels: buckets.map((b) => b.label),
-          datasets: [{
-            data: buckets.map((b) => b.count),
-            backgroundColor: "rgba(20,184,166,0.8)", borderRadius: 7, borderSkipped: false,
-          }],
-        },
-        options: opts({ y: { beginAtZero: true } }),
-      });
-    }
   }
 
   // ══════════════ RANKING ══════════════
