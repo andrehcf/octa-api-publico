@@ -409,7 +409,8 @@
         labels: hs.map((h) => `${h}h`),
         datasets: [{ data: hs.map((h) => volPorHora[h]), backgroundColor: "rgba(79,124,247,0.8)", borderRadius: 5, borderSkipped: false }],
       },
-      options: opts({ y: { beginAtZero: true } }),
+      options: opts({ y: { beginAtZero: true, grace: "12%" } }),
+      plugins: [rotuloBarras],
     });
 
     // TME por hora — tooltip estilo octa-api (TME médio/menor/maior, volume, analistas).
