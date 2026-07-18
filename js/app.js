@@ -707,8 +707,10 @@
     const [t, s] = TITULOS[estado.secao];
     $("pageTitle").textContent = t;
     $("pageSubtitle").textContent = s;
-    // Filtro de fila só se aplica à seção Performance
-    $("filaSelect").style.visibility = estado.secao === "performance" ? "visible" : "hidden";
+    // Filtros de fila/segmento só se aplicam à seção Performance
+    { const vis = estado.secao === "performance" ? "visible" : "hidden";
+      $("filaSelect").style.visibility = vis;
+      $("segmentoSelect").style.visibility = vis; }
     atualizarControlesData();
     RENDERS[estado.secao]();
     renderStatus();
@@ -762,17 +764,26 @@
   function popularFilas() {
     estado.gruposFila = construirGruposFila();
     const g = estado.gruposFila;
-    const opts = (dim) => g.filter((x) => x.dim === dim)
+    const optsDe = (dim) => g.filter((x) => x.dim === dim)
       .map((x) => `<option value="${x.slug}">${x.label}</option>`).join("");
     const optgroup = (nome, dim) => {
-      const inner = opts(dim);
+      const inner = optsDe(dim);
       return inner ? `<optgroup label="${nome}">${inner}</optgroup>` : "";
     };
-    $("filaSelect").innerHTML =
-      optgroup("Filas", "fila") + optgroup("Tags", "tag") + optgroup("Origem do cliente", "origem");
-    if (!g.some((x) => x.slug === estado.fila))
-      estado.fila = g[0] ? g[0].slug : "todas";
-    $("filaSelect").value = estado.fila;
+    // Dropdown 1: só filas. Dropdown 2: tags + origem (independentes da fila).
+    $("filaSelect").innerHTML = optsDe("fila");
+    $("segmentoSelect").innerHTML =
+      `<option value="">Tag / origem…</option>` + optgroup("Tags", "tag") + optgroup("Origem do cliente", "origem");
+    if (!g.some((x) => x.slug === estado.fila)) estado.fila = "todas";
+    sincronizarSeletores();
+  }
+
+  // Fila e segmento são mutuamente exclusivos — estado.fila guarda um slug de fila
+  // OU de segmento (tag:/orig:). Espelha o slug ativo nos dois dropdowns.
+  function sincronizarSeletores() {
+    const ehSegmento = estado.fila.includes(":");
+    $("filaSelect").value = ehSegmento ? "todas" : estado.fila;
+    $("segmentoSelect").value = ehSegmento ? estado.fila : "";
   }
 
   async function carregar() {
@@ -832,6 +843,13 @@
 
   $("filaSelect").addEventListener("change", (e) => {
     estado.fila = e.target.value;
+    $("segmentoSelect").value = "";            // exclusivos: escolher fila limpa o segmento
+    render();
+  });
+
+  $("segmentoSelect").addEventListener("change", (e) => {
+    estado.fila = e.target.value || "todas";   // vazio = volta para todas as filas
+    $("filaSelect").value = "todas";           // exclusivos: escolher segmento zera a fila
     render();
   });
 
