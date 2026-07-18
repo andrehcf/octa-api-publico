@@ -307,38 +307,35 @@
 
   // Preenche uma tabela de categorias somando o período a partir de agg_categorias_dia.
   // TMA: mediana exata quando o filtro é um único dia; senão média ponderada.
-  function preencherCategorias(tabelaId, subId, limite) {
+  let categoriasReqSeq = 0;   // guarda de corrida (descarta resposta obsoleta da RPC)
+
+  async function preencherCategorias(tabelaId, subId, limite) {
     const tabela = $(tabelaId);
     if (!tabela) return;
     const p = periodo();
     if (!p) return;
-    const umDia = p.inicio === p.fim;
-    const membros = new Set(membrosDaFila(estado.fila));
-    const porCat = {};
-    for (const r of estado.dados.categoriasDia) {
-      if (!membros.has(r.fila_slug) || !entre(r.dia, p.inicio, p.fim)) continue;
-      const c = porCat[r.categoria_nome] ||
-        (porCat[r.categoria_nome] = { volume: 0, resp: 0, satis: 0, tmaSoma: 0, tmaN: 0, mediana: null, nRows: 0 });
-      c.volume += r.volume;
-      c.resp += r.csat_respondidos;
-      c.satis += r.csat_satisfeitos;
-      c.tmaSoma += r.tma_soma_seg || 0;
-      c.tmaN += r.tma_n || 0;
-      c.nRows += 1;
-      if (umDia) c.mediana = r.tma_mediana_seg;   // exata só se 1 linha (dia único + fila única)
+    const meuSeq = ++categoriasReqSeq;
+    const membros = membrosDaFila(estado.fila);
+    let cats;
+    try {
+      cats = await API.categoriasPeriodo(membros, p.inicio, p.fim);
+    } catch (e) {
+      console.error(e);
+      return;
     }
-    const cats = Object.entries(porCat).sort((a, b) => b[1].volume - a[1].volume).slice(0, limite);
+    if (meuSeq !== categoriasReqSeq) return;   // filtro/período mudou: resposta velha
+    cats = cats.slice(0, limite);
     const sub = $(subId);
     if (sub) sub.textContent =
       `Top ${cats.length} categorias — ${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)}`;
-    tabela.querySelector("tbody").innerHTML = cats.map(([nome, c]) => {
-      const tma = (umDia && c.nRows === 1 && c.mediana != null) ? c.mediana : (c.tmaN ? c.tmaSoma / c.tmaN : null);
+    tabela.querySelector("tbody").innerHTML = cats.map((c) => {
+      const tma = c.tma_n ? c.tma_soma_seg / c.tma_n : null;
       return `<tr>
-        <td>${nome}</td>
+        <td>${c.categoria_nome}</td>
         <td class="num">${KPIS.fmtInt(c.volume)}</td>
         <td class="num">${KPIS.fmtDuracao(tma)}</td>
-        <td class="num">${c.resp ? KPIS.fmtPct(100 * c.satis / c.resp) : "—"}</td>
-        <td class="num">${KPIS.fmtInt(c.resp)}</td>
+        <td class="num">${c.csat_respondidos ? KPIS.fmtPct(100 * c.csat_satisfeitos / c.csat_respondidos) : "—"}</td>
+        <td class="num">${KPIS.fmtInt(c.csat_respondidos)}</td>
       </tr>`;
     }).join("") || `<tr><td colspan="5" class="empty-note">Sem dados no período</td></tr>`;
   }
@@ -349,11 +346,20 @@
 
   // ══════════════ DIA X HORA ══════════════
 
-  function renderDiaHora() {
+  let diaHoraReqSeq = 0;   // guarda de corrida (descarta resposta obsoleta da RPC)
+
+  async function renderDiaHora() {
     const p = periodo();
     if (!p) return;
-    const membrosH = new Set(membrosDaFila(estado.fila));
-    const linhas = estado.dados.chatsHora.filter((r) => membrosH.has(r.fila_slug) && entre(r.dia, p.inicio, p.fim));
+    const meuSeq = ++diaHoraReqSeq;
+    let linhas;   // linhas agregadas por (dow, hora) vindas da RPC
+    try {
+      linhas = await API.chatsHoraPeriodo(membrosDaFila(estado.fila), p.inicio, p.fim);
+    } catch (e) {
+      console.error(e);
+      return;
+    }
+    if (meuSeq !== diaHoraReqSeq) return;   // filtro/período mudou: resposta velha
 
     // Heatmap DOW × hora
     const grade = Array.from({ length: 7 }, () => Array(24).fill(0));
@@ -365,8 +371,7 @@
     const tmeMaxPorHora = Array(24).fill(null);   // maior TME (max dos máximos diários)
     const analistasPorHora = Array.from({ length: 24 }, () => new Set());  // distintos no período
     for (const r of linhas) {
-      const dow = new Date(r.dia + "T00:00:00").getDay();
-      grade[dow][r.hora] += r.volume;
+      grade[r.dow][r.hora] += r.volume;             // dow (0=Dom) já vem do banco
       volPorHora[r.hora] += r.volume;
       tmePorHora[r.hora].soma += r.tme_soma_seg || 0;
       tmePorHora[r.hora].n += r.tme_n || 0;
@@ -381,8 +386,8 @@
         tmeMinPorHora[r.hora] = tmeMinPorHora[r.hora] == null ? r.tme_min_seg : Math.min(tmeMinPorHora[r.hora], r.tme_min_seg);
       if (r.tme_max_seg != null)
         tmeMaxPorHora[r.hora] = tmeMaxPorHora[r.hora] == null ? r.tme_max_seg : Math.max(tmeMaxPorHora[r.hora], r.tme_max_seg);
-      const ana = typeof r.analistas === "string" ? JSON.parse(r.analistas) : (r.analistas || []);
-      for (const a of ana) analistasPorHora[r.hora].add(a);
+      // analistas = array dos arrays diários (jsonb_agg); achata e deduplica.
+      for (const arr of (r.analistas || [])) for (const a of arr) analistasPorHora[r.hora].add(a);
     }
     const maxCell = Math.max(1, ...grade.flat());
     const DOWS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
