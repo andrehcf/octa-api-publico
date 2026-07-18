@@ -114,20 +114,27 @@
     const label = new Map();
     for (const r of estado.dados.chatsDia)
       if (!label.has(r.fila_slug)) label.set(r.fila_slug, r.fila_label);
+    const ordena = (arr) => arr.sort((a, b) => label.get(a).localeCompare(label.get(b), "pt-BR"));
     const grupos = [];
-    if (label.has("todas")) grupos.push({ slug: "todas", label: "Todas as filas", membros: ["todas"] });
-    const bases = [...label.keys()]
-      .filter((s) => s !== "todas" && s !== "plantao" && !s.endsWith("-plantao"))
-      .sort((a, b) => label.get(a).localeCompare(label.get(b), "pt-BR"));
+
+    // Filas (slug sem prefixo). Pareia base + -plantao ("X (+Plantão)").
+    if (label.has("todas"))
+      grupos.push({ slug: "todas", label: "Todas as filas", membros: ["todas"], dim: "fila" });
+    const bases = ordena([...label.keys()].filter(
+      (s) => !s.includes(":") && s !== "todas" && s !== "plantao" && !s.endsWith("-plantao")));
     for (const base of bases) {
       const membros = [base];
       let lbl = label.get(base);
-      if (label.has(base + "-plantao")) {
-        membros.push(base + "-plantao");
-        lbl += " (+Plantão)";
-      }
-      grupos.push({ slug: base, label: lbl, membros });
+      if (label.has(base + "-plantao")) { membros.push(base + "-plantao"); lbl += " (+Plantão)"; }
+      grupos.push({ slug: base, label: lbl, membros, dim: "fila" });
     }
+
+    // Tags (tag:*) e Origem (orig:*) — independentes, sem combinação (membro único).
+    for (const s of ordena([...label.keys()].filter((s) => s.startsWith("tag:"))))
+      grupos.push({ slug: s, label: label.get(s), membros: [s], dim: "tag" });
+    for (const s of ordena([...label.keys()].filter((s) => s.startsWith("orig:"))))
+      grupos.push({ slug: s, label: label.get(s), membros: [s], dim: "origem" });
+
     return grupos;
   }
 
@@ -671,7 +678,10 @@
 
   function filaLabel(slug) {
     const g = (estado.gruposFila || []).find((x) => x.slug === slug);
-    if (g) return g.label;
+    if (g) {
+      const sufixo = g.dim === "tag" ? " (tag)" : g.dim === "origem" ? " (origem)" : "";
+      return g.label + sufixo;
+    }
     const r = estado.dados.chatsDia.find((x) => x.fila_slug === slug);
     return r ? r.fila_label : slug;
   }
@@ -751,10 +761,17 @@
 
   function popularFilas() {
     estado.gruposFila = construirGruposFila();
-    $("filaSelect").innerHTML = estado.gruposFila
-      .map((g) => `<option value="${g.slug}">${g.label}</option>`).join("");
-    if (!estado.gruposFila.some((g) => g.slug === estado.fila))
-      estado.fila = estado.gruposFila[0] ? estado.gruposFila[0].slug : "todas";
+    const g = estado.gruposFila;
+    const opts = (dim) => g.filter((x) => x.dim === dim)
+      .map((x) => `<option value="${x.slug}">${x.label}</option>`).join("");
+    const optgroup = (nome, dim) => {
+      const inner = opts(dim);
+      return inner ? `<optgroup label="${nome}">${inner}</optgroup>` : "";
+    };
+    $("filaSelect").innerHTML =
+      optgroup("Filas", "fila") + optgroup("Tags", "tag") + optgroup("Origem do cliente", "origem");
+    if (!g.some((x) => x.slug === estado.fila))
+      estado.fila = g[0] ? g[0].slug : "todas";
     $("filaSelect").value = estado.fila;
   }
 
