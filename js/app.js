@@ -6,7 +6,7 @@
 (() => {
   const estado = {
     dados: null,
-    dias: 30,          // 0 = janela completa
+    dias: 1,           // padrão = Hoje (só o dia atual); 0 = janela completa
     range: null,       // {inicio, fim} quando período personalizado ativo
     fila: "todas",
     secao: "performance",
@@ -712,10 +712,11 @@
     const [t, s] = TITULOS[estado.secao];
     $("pageTitle").textContent = t;
     $("pageSubtitle").textContent = s;
-    // Filtros de fila/segmento só se aplicam à seção Performance
+    // Filtros de fila/tag/origem só se aplicam à seção Performance
     { const vis = estado.secao === "performance" ? "visible" : "hidden";
       $("filaSelect").style.visibility = vis;
-      $("segmentoSelect").style.visibility = vis; }
+      $("tagSelect").style.visibility = vis;
+      $("origemSelect").style.visibility = vis; }
     atualizarControlesData();
     RENDERS[estado.secao]();
     renderStatus();
@@ -771,24 +772,21 @@
     const g = estado.gruposFila;
     const optsDe = (dim) => g.filter((x) => x.dim === dim)
       .map((x) => `<option value="${x.slug}">${x.label}</option>`).join("");
-    const optgroup = (nome, dim) => {
-      const inner = optsDe(dim);
-      return inner ? `<optgroup label="${nome}">${inner}</optgroup>` : "";
-    };
-    // Dropdown 1: só filas. Dropdown 2: tags + origem (independentes da fila).
+    // Três dropdowns independentes: Filas, Tags, Origem (mutuamente exclusivos).
     $("filaSelect").innerHTML = optsDe("fila");
-    $("segmentoSelect").innerHTML =
-      `<option value="">Tag / origem…</option>` + optgroup("Tags", "tag") + optgroup("Origem do cliente", "origem");
+    $("tagSelect").innerHTML = `<option value="">Tag…</option>` + optsDe("tag");
+    $("origemSelect").innerHTML = `<option value="">Origem…</option>` + optsDe("origem");
     if (!g.some((x) => x.slug === estado.fila)) estado.fila = "todas";
     sincronizarSeletores();
   }
 
-  // Fila e segmento são mutuamente exclusivos — estado.fila guarda um slug de fila
-  // OU de segmento (tag:/orig:). Espelha o slug ativo nos dois dropdowns.
+  // Fila, tag e origem são mutuamente exclusivos — estado.fila guarda um slug de fila
+  // OU de tag (tag:) OU de origem (orig:). Espelha o slug ativo nos três dropdowns.
   function sincronizarSeletores() {
-    const ehSegmento = estado.fila.includes(":");
-    $("filaSelect").value = ehSegmento ? "todas" : estado.fila;
-    $("segmentoSelect").value = ehSegmento ? estado.fila : "";
+    const s = estado.fila;
+    $("filaSelect").value = s.includes(":") ? "todas" : s;
+    $("tagSelect").value = s.startsWith("tag:") ? s : "";
+    $("origemSelect").value = s.startsWith("orig:") ? s : "";
   }
 
   async function carregar() {
@@ -846,15 +844,25 @@
     render();
   });
 
+  // Filas, tags e origem são mutuamente exclusivos: escolher um zera os outros dois.
   $("filaSelect").addEventListener("change", (e) => {
     estado.fila = e.target.value;
-    $("segmentoSelect").value = "";            // exclusivos: escolher fila limpa o segmento
+    $("tagSelect").value = "";
+    $("origemSelect").value = "";
     render();
   });
 
-  $("segmentoSelect").addEventListener("change", (e) => {
+  $("tagSelect").addEventListener("change", (e) => {
     estado.fila = e.target.value || "todas";   // vazio = volta para todas as filas
-    $("filaSelect").value = "todas";           // exclusivos: escolher segmento zera a fila
+    $("filaSelect").value = "todas";
+    $("origemSelect").value = "";
+    render();
+  });
+
+  $("origemSelect").addEventListener("change", (e) => {
+    estado.fila = e.target.value || "todas";
+    $("filaSelect").value = "todas";
+    $("tagSelect").value = "";
     render();
   });
 

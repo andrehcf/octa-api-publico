@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=26">
+<link rel="stylesheet" href="css/style.css?v=27">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -65,9 +65,9 @@
 
     <div class="topbar-right">
       <div class="tab-group" id="periodoTabs">
-        <button class="tab" data-dias="1">Hoje</button>
+        <button class="tab active" data-dias="1">Hoje</button>
         <button class="tab" data-dias="7">7 dias</button>
-        <button class="tab active" data-dias="30">30 dias</button>
+        <button class="tab" data-dias="30">30 dias</button>
         <button class="tab" data-dias="90">90 dias</button>
         <button class="tab" data-dias="0">Tudo</button>
       </div>
@@ -78,7 +78,8 @@
         <button class="date-clear hidden" id="dateClear" title="Limpar período personalizado" aria-label="Limpar">×</button>
       </div>
       <select class="select-fila" id="filaSelect" title="Fila"></select>
-      <select class="select-fila" id="segmentoSelect" title="Filtrar por tag ou origem"></select>
+      <select class="select-fila" id="tagSelect" title="Filtrar por tag"></select>
+      <select class="select-fila" id="origemSelect" title="Filtrar por origem do cliente"></select>
     </div>
   </div>
 
@@ -361,9 +362,9 @@
 
 </main>
 
-<script src="js/config.js?v=26"></script>
-<script src="js/kpis.js?v=26"></script>
-<script src="js/api.js?v=26"></script>
-<script src="js/app.js?v=26"></script>
+<script src="js/config.js?v=27"></script>
+<script src="js/kpis.js?v=27"></script>
+<script src="js/api.js?v=27"></script>
+<script src="js/app.js?v=27"></script>
 </body>
 </html>
