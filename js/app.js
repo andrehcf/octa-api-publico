@@ -11,6 +11,8 @@
     fila: "todas",
     secao: "performance",
     rankingMes: null,
+    tkt: { form: "", status: "", analista: "", porFechamento: false },  // filtros de tickets
+    tktExport: { forms: [], ranking: [] },                              // último resultado p/ CSV
   };
 
   const charts = {};   // registry de instâncias Chart.js
@@ -505,70 +507,102 @@
 
   // ══════════════ TICKETS ══════════════
 
-  function renderTickets() {
+  let tktReqSeq = 0;   // guarda de corrida das RPCs de tickets
+
+  async function renderTickets() {
     const p = periodo();
     if (!p) return;
-    const linhas = estado.dados.ticketsDia.filter((r) => entre(r.dia, p.inicio, p.fim));
-    const abertos = KPIS.soma(linhas, "abertos");
-    const fechados = KPIS.soma(linhas, "fechados");
-
+    const meuSeq = ++tktReqSeq;
+    const t = estado.tkt;
+    const f = {
+      forms: t.form ? [t.form] : [],
+      status: t.status ? [t.status] : [],
+      analistas: t.analista ? [t.analista] : [],
+      ini: p.inicio, fim: p.fim, porFechamento: t.porFechamento,
+    };
     const pAnt = periodoAnterior(p);
-    const linhasAnt = pAnt
-      ? estado.dados.ticketsDia.filter((r) => entre(r.dia, pAnt.inicio, pAnt.fim)) : null;
+    const fAnt = pAnt ? { ...f, ini: pAnt.inicio, fim: pAnt.fim } : null;
 
-    $("kpiTktAbertos").textContent = KPIS.fmtInt(abertos);
-    $("kpiTktFechados").textContent = KPIS.fmtInt(fechados);
-    $("kpiTktSaldo").textContent = (abertos - fechados > 0 ? "+" : "") + KPIS.fmtInt(abertos - fechados);
-    $("kpiTktAbertosDelta").innerHTML = KPIS.deltaHtml(
-      abertos, linhasAnt ? KPIS.soma(linhasAnt, "abertos") : null, { inverso: true, fmt: KPIS.fmtInt });
-    $("kpiTktFechadosDelta").innerHTML = KPIS.deltaHtml(
-      fechados, linhasAnt ? KPIS.soma(linhasAnt, "fechados") : null, { fmt: KPIS.fmtInt });
+    let kpis, kAnt, ts, forms, ranking, status;
+    try {
+      [kpis, kAnt, ts, forms, ranking, status] = await Promise.all([
+        API.ticketsKpis(f),
+        fAnt ? API.ticketsKpis(fAnt) : Promise.resolve({}),
+        API.ticketsTimeseries(f),
+        API.ticketsPorFormulario(f),
+        API.ticketsRankingAnalistas(f),
+        API.ticketsPorStatus(f),
+      ]);
+    } catch (e) { console.error(e); return; }
+    if (meuSeq !== tktReqSeq) return;              // filtro/período mudou: resposta velha
+    estado.tktExport = { forms, ranking };
 
-    const tm = estado.dados.ticketsMes;
-    const ultimoMes = tm.length ? tm[tm.length - 1] : null;
-    $("kpiTktTma").textContent = ultimoMes ? KPIS.fmtHoras(ultimoMes.tma_mediana_h) : "—";
+    const setar = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+    const setarH = (id, h) => { const el = $(id); if (el) el.innerHTML = h; };
+    const int = (x) => KPIS.fmtInt(x || 0);
+    const horas = (h) => (h == null ? "—" : KPIS.fmtHoras(h));
 
+    // KPIs
+    setar("kpiTktTotal", int(kpis.total));
+    setar("kpiTktAbertos", int(kpis.abertos));
+    setar("kpiTktFechados", int(kpis.fechados));
+    setar("kpiTktTma", horas(kpis.tma_mediana_h));
+    setarH("kpiTktTotalDelta", KPIS.deltaPctHtml(kpis.total, kAnt.total));
+    setarH("kpiTktFechadosDelta", KPIS.deltaPctHtml(kpis.fechados, kAnt.fechados));
+    setarH("kpiTktTmaDelta", KPIS.deltaPctHtml(kpis.tma_mediana_h, kAnt.tma_mediana_h, true));
+    setar("kpiTktTotalAnt", int(kAnt.total));
+    setar("kpiTktFechadosAnt", int(kAnt.fechados));
+    setar("kpiTktTmaAnt", horas(kAnt.tma_mediana_h));
+    const comFormPct = kpis.total ? 100 * (kpis.com_form || 0) / kpis.total : 0;
+    setar("kpiTktTotalFoot", `${KPIS.fmtPct(comFormPct)} com formulário`);
+    setar("kpiTktTmaFoot", `mediana de ${int(kpis.fechados)} fechados`);
+    setar("subTktFluxo", `${int(kpis.abertos_fluxo)} criados · ${int(kpis.fechados_fluxo)} fechados no período`);
+
+    // Evolução diária (total / fechados)
     novoChart("chartTicketsFluxo", {
       type: "line",
       data: {
-        labels: linhas.map((r) => KPIS.fmtDiaCurto(r.dia)),
+        labels: ts.map((r) => KPIS.fmtDiaCurto(r.dia)),
         datasets: [
-          { label: "Abertos", data: linhas.map((r) => r.abertos),
+          { label: "Total", data: ts.map((r) => r.total),
             borderColor: "#4f7cf7", backgroundColor: "rgba(79,124,247,0.08)", tension: 0.4, pointRadius: 2, fill: true },
-          { label: "Fechados", data: linhas.map((r) => r.fechados),
+          { label: "Fechados", data: ts.map((r) => r.fechados),
             borderColor: "#34d399", backgroundColor: "rgba(52,211,153,0.08)", tension: 0.4, pointRadius: 2, fill: true },
         ],
       },
       options: opts({ y: { beginAtZero: true } }),
     });
 
-    // Por formulário / status — meses que intersectam o período
-    const mesesSel = mesesDoPeriodo(p);
-    const porForm = {};
-    for (const r of estado.dados.ticketsFormMes) {
-      if (!mesesSel.has(r.mes)) continue;
-      porForm[r.form_name] = (porForm[r.form_name] || 0) + r.total;
-    }
-    const topForms = Object.entries(porForm).sort((a, b) => b[1] - a[1]).slice(0, 8);
-    const maxForm = topForms.length ? topForms[0][1] : 1;
-    $("ticketsForms").innerHTML = topForms.map(([nome, tot]) => `
-      <div class="bar-item">
-        <div class="bar-label-row"><strong title="${nome}">${nome}</strong><span>${KPIS.fmtInt(tot)}</span></div>
-        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(100 * tot / maxForm)}%"></div></div>
-      </div>`).join("") || `<div class="empty-note">Sem dados no período</div>`;
+    // Por formulário + SLA
+    $("tabelaTktForm").querySelector("tbody").innerHTML = forms.map((r) => `
+      <tr>
+        <td title="${r.form_name}">${r.form_name}</td>
+        <td class="num">${int(r.total)}</td>
+        <td class="num">${int(r.em_aberto)}</td>
+        <td class="num">${int(r.fechados)}</td>
+        <td class="num">${horas(r.tma_mediana_h)}</td>
+        <td class="num">${r.alvo_horas != null ? horas(r.alvo_horas) : "—"}</td>
+        <td class="num">${r.pct_dentro_sla != null ? KPIS.fmtPct(r.pct_dentro_sla) : "—"}</td>
+      </tr>`).join("") || `<tr><td colspan="7" class="empty-note">Sem dados no período</td></tr>`;
 
-    const porStatus = {};
-    for (const r of estado.dados.ticketsStatusMes) {
-      if (!mesesSel.has(r.mes)) continue;
-      porStatus[r.status_name] = (porStatus[r.status_name] || 0) + r.total;
-    }
-    const stEntries = Object.entries(porStatus).sort((a, b) => b[1] - a[1]);
+    // Ranking de analistas
+    $("tabelaTktRanking").querySelector("tbody").innerHTML = ranking.map((r) => `
+      <tr>
+        <td class="num">${r.posicao}</td>
+        <td>${r.assigned_name}</td>
+        <td class="num">${int(r.produtividade)}</td>
+        <td class="num">${KPIS.fmtPct(100 * (r.qualidade_frac || 0))}</td>
+        <td class="num">${r.sla_pct != null ? KPIS.fmtPct(r.sla_pct) : "—"}</td>
+        <td class="num"><strong>${(r.media_final || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+      </tr>`).join("") || `<tr><td colspan="6" class="empty-note">Sem dados no período</td></tr>`;
+
+    // Por status
     novoChart("chartTicketsStatus", {
       type: "doughnut",
       data: {
-        labels: stEntries.map(([s]) => s),
+        labels: status.map((r) => r.status_name),
         datasets: [{
-          data: stEntries.map(([, v]) => v),
+          data: status.map((r) => r.total),
           backgroundColor: ["#34d399", "#4f7cf7", "#fbbf24", "#f87171", "#a78bfa", "#22d3ee"],
           borderWidth: 0,
         }],
@@ -578,6 +612,32 @@
         plugins: { legend: { position: "right", labels: { boxWidth: 10, font: { size: 11 } } } },
       },
     });
+  }
+
+  // Popula os dropdowns de filtro de tickets (formulários/analistas via RPC; status fixo).
+  const TKT_STATUS = ["Novo", "Em andamento", "Pendente", "Resolvido", "Cancelado"];
+  async function popularTktFiltros() {
+    let ops;
+    try { ops = await API.ticketsOpcoes(); } catch (e) { console.error(e); return; }
+    const opt = (v, txt) => `<option value="${v}">${txt}</option>`;
+    $("tktForm").innerHTML = opt("", "Todos os formulários") + (ops.forms || []).map((n) => opt(n, n)).join("");
+    $("tktStatus").innerHTML = opt("", "Todos os status") + TKT_STATUS.map((s) => opt(s, s)).join("");
+    $("tktAnalista").innerHTML = opt("", "Todos os analistas") + (ops.analistas || []).map((n) => opt(n, n)).join("");
+  }
+
+  // Download client-side de CSV (separador ';' + BOM p/ abrir certo no Excel pt-BR).
+  function baixarCSV(nomeArq, cabecalho, linhas) {
+    const esc = (v) => {
+      const s = v == null ? "" : String(v);
+      return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [cabecalho, ...linhas].map((row) => row.map(esc).join(";")).join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = nomeArq;
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
 
   // ══════════════ CATEGORIAS ══════════════
@@ -794,6 +854,7 @@
       estado.dados = await API.carregarTudo();
       $("errorBanner").classList.add("hidden");
       popularFilas();
+      popularTktFiltros();     // dropdowns de tickets (formulários/analistas via RPC)
       render();
     } catch (e) {
       console.error(e);
@@ -869,6 +930,39 @@
   $("rankingMes").addEventListener("change", (e) => {
     estado.rankingMes = e.target.value;
     renderRanking();
+  });
+
+  // ── Filtros de Tickets (formulário/status/analista + toggle abertura/fechamento) ──
+  $("tktForm").addEventListener("change", (e) => { estado.tkt.form = e.target.value; renderTickets(); });
+  $("tktStatus").addEventListener("change", (e) => { estado.tkt.status = e.target.value; renderTickets(); });
+  $("tktAnalista").addEventListener("change", (e) => { estado.tkt.analista = e.target.value; renderTickets(); });
+  $("tktModoTabs").addEventListener("click", (e) => {
+    const btn = e.target.closest(".tab");
+    if (!btn) return;
+    document.querySelectorAll("#tktModoTabs .tab").forEach((x) => x.classList.remove("active"));
+    btn.classList.add("active");
+    estado.tkt.porFechamento = btn.dataset.fech === "1";
+    renderTickets();
+  });
+  $("btnExportTktForm").addEventListener("click", () => {
+    baixarCSV("tickets_por_formulario.csv",
+      ["Formulário", "Total", "Em aberto", "Fechados", "TMA (h)", "SLA alvo (h)", "% no SLA"],
+      (estado.tktExport.forms || []).map((r) => [
+        r.form_name, r.total, r.em_aberto, r.fechados,
+        r.tma_mediana_h != null ? r.tma_mediana_h.toFixed(1) : "",
+        r.alvo_horas != null ? r.alvo_horas : "",
+        r.pct_dentro_sla != null ? r.pct_dentro_sla.toFixed(1) : "",
+      ]));
+  });
+  $("btnExportTktRanking").addEventListener("click", () => {
+    baixarCSV("ranking_analistas.csv",
+      ["#", "Analista", "Produtividade", "Qualidade (%)", "SLA (%)", "Média final"],
+      (estado.tktExport.ranking || []).map((r) => [
+        r.posicao, r.assigned_name, r.produtividade,
+        (100 * (r.qualidade_frac || 0)).toFixed(2),
+        r.sla_pct != null ? r.sla_pct.toFixed(1) : "",
+        (r.media_final != null ? r.media_final.toFixed(2) : ""),
+      ]));
   });
 
   // ── Sidebar mobile ──

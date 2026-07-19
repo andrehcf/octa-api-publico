@@ -44,28 +44,45 @@ const API = (() => {
     return data || [];
   }
 
-  // Carrega todas as tabelas em paralelo; ordem = PK de cada uma.
+  // ── Tickets: tudo agregado server-side sob demanda (paridade com octa-api) ──
+  // `f` = { forms:[], status:[], analistas:[], ini, fim, porFechamento }.
+  async function _rpc(nome, params) {
+    const { data, error } = await cliente.rpc(nome, params);
+    if (error) throw new Error(`${nome}: ${error.message}`);
+    return data;
+  }
+  const _tktParams = (f) => ({
+    p_forms: f.forms || [], p_status: f.status || [], p_analistas: f.analistas || [],
+    p_ini: f.ini, p_fim: f.fim, p_por_fechamento: !!f.porFechamento,
+  });
+  const ticketsOpcoes         = ()  => _rpc("tickets_opcoes", {});                                  // {forms, analistas}
+  const ticketsKpis           = (f) => _rpc("tickets_kpis", _tktParams(f)).then((d) => (d && d[0]) || {});
+  const ticketsTimeseries     = (f) => _rpc("tickets_timeseries", _tktParams(f)).then((d) => d || []);
+  const ticketsPorFormulario  = (f) => _rpc("tickets_por_formulario", _tktParams(f)).then((d) => d || []);
+  const ticketsPorStatus      = (f) => _rpc("tickets_por_status", _tktParams(f)).then((d) => d || []);
+  const ticketsRankingAnalistas = (f) => _rpc("tickets_ranking_analistas", _tktParams(f)).then((d) => d || []);
+
+  // Carrega as tabelas pequenas em paralelo; ordem = PK de cada uma. (Tickets saíram
+  // daqui — agora são a tabela-fato + RPCs, agregados server-side sob demanda.)
   async function carregarTudo() {
     const [
-      chatsDia, ticketsDia, ticketsMes, ticketsFormMes, ticketsStatusMes,
-      agentesMes, tmaDistDia, reincMes, syncInfo,
+      chatsDia, agentesMes, tmaDistDia, reincMes, syncInfo,
     ] = await Promise.all([
       tabela("agg_chats_dia", "dia,fila_slug"),
-      tabela("agg_tickets_dia", "dia"),
-      tabela("agg_tickets_mes", "mes"),
-      tabela("agg_tickets_form_mes", "mes,form_name"),
-      tabela("agg_tickets_status_mes", "mes,status_name"),
       tabela("agg_agentes_mes", "mes,agent_id"),
       tabela("agg_tma_distribuicao_dia", "dia,fila_slug"),
       tabela("agg_reincidencia_mes", "mes"),
       tabela("sync_info", "id"),
     ]);
     return {
-      chatsDia, ticketsDia, ticketsMes, ticketsFormMes, ticketsStatusMes,
-      agentesMes, tmaDistDia, reincMes,
+      chatsDia, agentesMes, tmaDistDia, reincMes,
       syncInfo: syncInfo[0] || null,
     };
   }
 
-  return { carregarTudo, categoriasPeriodo, chatsHoraPeriodo, cliente };
+  return {
+    carregarTudo, categoriasPeriodo, chatsHoraPeriodo, cliente,
+    ticketsOpcoes, ticketsKpis, ticketsTimeseries,
+    ticketsPorFormulario, ticketsPorStatus, ticketsRankingAnalistas,
+  };
 })();

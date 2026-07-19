@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=27">
+<link rel="stylesheet" href="css/style.css?v=28">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -197,26 +197,55 @@
 
   <!-- ═══ SEÇÃO: TICKETS ═══ -->
   <section class="section" id="sec-tickets">
+    <!-- Filtros específicos de tickets -->
+    <div class="tkt-filtros">
+      <select class="select-fila" id="tktForm" title="Formulário"></select>
+      <select class="select-fila" id="tktStatus" title="Status"></select>
+      <select class="select-fila" id="tktAnalista" title="Analista"></select>
+      <div class="tab-group" id="tktModoTabs" title="Contar pela data de abertura ou de fechamento">
+        <button class="tab active" data-fech="0">Abertura</button>
+        <button class="tab" data-fech="1">Fechamento</button>
+      </div>
+    </div>
+
     <div class="kpi-grid cols-4">
       <div class="kpi-card blue">
-        <div class="kpi-header"><div class="kpi-icon blue">📥</div><span class="kpi-label">Abertos no período</span></div>
-        <div class="kpi-value blue" id="kpiTktAbertos">—</div>
-        <div class="kpi-delta" id="kpiTktAbertosDelta"></div>
-      </div>
-      <div class="kpi-card green">
-        <div class="kpi-header"><div class="kpi-icon green">📤</div><span class="kpi-label">Fechados no período</span></div>
-        <div class="kpi-value green" id="kpiTktFechados">—</div>
-        <div class="kpi-delta" id="kpiTktFechadosDelta"></div>
+        <div class="kpi-header"><div class="kpi-icon blue">🎫</div><span class="kpi-label">Total no período</span></div>
+        <div class="kpi-value blue" id="kpiTktTotal">—</div>
+        <div class="kpi-row"><span class="kpi-delta" id="kpiTktTotalDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiTktTotalAnt">—</b></span></div>
+        <div class="kpi-foot" id="kpiTktTotalFoot"></div>
       </div>
       <div class="kpi-card amber">
-        <div class="kpi-header"><div class="kpi-icon amber">⚖️</div><span class="kpi-label">Saldo (abertos − fechados)</span></div>
-        <div class="kpi-value amber" id="kpiTktSaldo">—</div>
-        <div class="kpi-delta"></div>
+        <div class="kpi-header"><div class="kpi-icon amber">📥</div><span class="kpi-label">Em aberto</span></div>
+        <div class="kpi-value amber" id="kpiTktAbertos">—</div>
+        <div class="kpi-row"><span class="kpi-delta"></span><span class="kpi-anterior"></span></div>
+        <div class="kpi-foot" id="kpiTktAbertosFoot"></div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-header"><div class="kpi-icon green">📤</div><span class="kpi-label">Fechados</span></div>
+        <div class="kpi-value green" id="kpiTktFechados">—</div>
+        <div class="kpi-row"><span class="kpi-delta" id="kpiTktFechadosDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiTktFechadosAnt">—</b></span></div>
+        <div class="kpi-foot" id="kpiTktFechadosFoot"></div>
       </div>
       <div class="kpi-card teal">
-        <div class="kpi-header"><div class="kpi-icon teal">⌛</div><span class="kpi-label">TMA mediana (mês atual)</span></div>
+        <div class="kpi-header"><div class="kpi-icon teal">⌛</div><span class="kpi-label">TMA mediana</span></div>
         <div class="kpi-value teal" id="kpiTktTma">—</div>
-        <div class="kpi-delta"></div>
+        <div class="kpi-row"><span class="kpi-delta" id="kpiTktTmaDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiTktTmaAnt">—</b></span></div>
+        <div class="kpi-foot" id="kpiTktTmaFoot"></div>
+      </div>
+    </div>
+
+    <div class="chart-grid full">
+      <div class="card">
+        <div class="card-header"><div>
+          <div class="card-title">Evolução Diária de Tickets</div>
+          <div class="card-subtitle" id="subTktFluxo">Total e fechados por dia</div>
+        </div></div>
+        <div class="chart-wrap tall"><canvas id="chartTicketsFluxo"></canvas></div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#4f7cf7"></div> Total</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div> Fechados</div>
+        </div>
       </div>
     </div>
 
@@ -224,14 +253,19 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <div class="card-title">Fluxo Diário de Tickets</div>
-            <div class="card-subtitle">Abertos (por criação) vs fechados (Resolvido/Cancelado)</div>
+            <div class="card-title">Por Formulário + SLA</div>
+            <div class="card-subtitle" id="subTktForms">Top 25 formulários — total, TMA e % dentro do SLA</div>
           </div>
+          <button class="btn-export" id="btnExportTktForm" title="Exportar CSV">⬇ CSV</button>
         </div>
-        <div class="chart-wrap tall"><canvas id="chartTicketsFluxo"></canvas></div>
-        <div class="legend">
-          <div class="legend-item"><div class="legend-dot" style="background:#4f7cf7"></div> Abertos</div>
-          <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div> Fechados</div>
+        <div class="table-wrap">
+          <table class="data" id="tabelaTktForm">
+            <thead><tr>
+              <th>Formulário</th><th class="num">Total</th><th class="num">Em aberto</th>
+              <th class="num">Fechados</th><th class="num">TMA</th><th class="num">SLA alvo</th><th class="num">% no SLA</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -240,19 +274,26 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <div class="card-title">Top Formulários</div>
-            <div class="card-subtitle" id="subTktForms">Tickets por formulário</div>
+            <div class="card-title">Ranking de Analistas</div>
+            <div class="card-subtitle">Produtividade × Qualidade × SLA (fechados no período)</div>
           </div>
+          <button class="btn-export" id="btnExportTktRanking" title="Exportar CSV">⬇ CSV</button>
         </div>
-        <div class="bar-list" id="ticketsForms"></div>
+        <div class="table-wrap">
+          <table class="data" id="tabelaTktRanking">
+            <thead><tr>
+              <th>#</th><th>Analista</th><th class="num">Produtiv.</th>
+              <th class="num">Qualidade</th><th class="num">SLA</th><th class="num">Média final</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
       <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Por Status</div>
-            <div class="card-subtitle">Distribuição no período</div>
-          </div>
-        </div>
+        <div class="card-header"><div>
+          <div class="card-title">Por Status</div>
+          <div class="card-subtitle">Distribuição no período</div>
+        </div></div>
         <div class="chart-wrap tall"><canvas id="chartTicketsStatus"></canvas></div>
       </div>
     </div>
@@ -362,9 +403,9 @@
 
 </main>
 
-<script src="js/config.js?v=27"></script>
-<script src="js/kpis.js?v=27"></script>
-<script src="js/api.js?v=27"></script>
-<script src="js/app.js?v=27"></script>
+<script src="js/config.js?v=28"></script>
+<script src="js/kpis.js?v=28"></script>
+<script src="js/api.js?v=28"></script>
+<script src="js/app.js?v=28"></script>
 </body>
 </html>
