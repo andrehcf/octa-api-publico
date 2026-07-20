@@ -67,23 +67,25 @@
       if (fim < inicio) return null;
       return { inicio, fim, minDia };
     }
-    // Presets nomeados, ancorados no último dia com dados (maxDia) e clampados à janela.
-    const iso = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-    const ref = new Date(maxDia + "T00:00:00");
+    // Presets ancorados em HOJE (horário de Brasília, UTC-3 — casa com o "dia" BRT dos
+    // dados, independente do fuso do navegador). Semana = domingo→hoje; mês = dia 1→hoje
+    // (to-date). NÃO usa o último dia com dados como âncora: senão "Ontem" viraria
+    // anteontem e "Essa semana" começaria num domingo isolado quando o sync atrasa.
+    // Dias ainda sem dados simplesmente somam 0 — não distorcem a comparação.
+    const iso = (dt) => `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+    const brt = new Date(Date.now() - 3 * 3600 * 1000);   // "agora" em BRT
+    const ref = new Date(Date.UTC(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate()));  // meia-noite de hoje (BRT)
     let ini = new Date(ref), fim = new Date(ref);
     if (estado.preset === "ontem") {
-      ini.setDate(ini.getDate() - 1); fim = new Date(ini);
+      ini.setUTCDate(ini.getUTCDate() - 1); fim = new Date(ini);
     } else if (estado.preset === "semana") {
-      ini.setDate(ini.getDate() - ref.getDay());          // domingo (getDay: 0=dom)
-      fim = new Date(ini); fim.setDate(fim.getDate() + 6); // sábado
+      ini.setUTCDate(ini.getUTCDate() - ref.getUTCDay());   // volta ao domingo (getUTCDay: 0=dom)
     } else if (estado.preset === "mes") {
-      ini = new Date(ref.getFullYear(), ref.getMonth(), 1);
-      fim = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
-    }                                                       // "hoje": ini = fim = ref
+      ini = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), 1));
+    }                                                        // "hoje": ini = fim = hoje
     let inicio = iso(ini);
-    let fimS = iso(fim);
-    if (inicio < minDia) inicio = minDia;
-    if (fimS > maxDia) fimS = maxDia;
+    const fimS = iso(fim);
+    if (inicio < minDia) inicio = minDia;   // piso da janela de 120 dias
     if (fimS < inicio) return null;
     return { inicio, fim: fimS, minDia };
   }
