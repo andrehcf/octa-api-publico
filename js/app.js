@@ -6,7 +6,7 @@
 (() => {
   const estado = {
     dados: null,
-    dias: 1,           // padrão = Hoje (só o dia atual); 0 = janela completa
+    preset: "hoje",    // hoje | ontem | semana (dom–sáb) | mes — âncora = último dia com dados
     range: null,       // {inicio, fim} quando período personalizado ativo
     fila: "todas",
     secao: "performance",
@@ -67,11 +67,25 @@
       if (fim < inicio) return null;
       return { inicio, fim, minDia };
     }
-    if (estado.dias === 0) return { inicio: minDia, fim: maxDia, minDia };
-    const d = new Date(maxDia + "T00:00:00");
-    d.setDate(d.getDate() - estado.dias + 1);
-    const inicio = d.toISOString().slice(0, 10);
-    return { inicio: inicio < minDia ? minDia : inicio, fim: maxDia, minDia };
+    // Presets nomeados, ancorados no último dia com dados (maxDia) e clampados à janela.
+    const iso = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    const ref = new Date(maxDia + "T00:00:00");
+    let ini = new Date(ref), fim = new Date(ref);
+    if (estado.preset === "ontem") {
+      ini.setDate(ini.getDate() - 1); fim = new Date(ini);
+    } else if (estado.preset === "semana") {
+      ini.setDate(ini.getDate() - ref.getDay());          // domingo (getDay: 0=dom)
+      fim = new Date(ini); fim.setDate(fim.getDate() + 6); // sábado
+    } else if (estado.preset === "mes") {
+      ini = new Date(ref.getFullYear(), ref.getMonth(), 1);
+      fim = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+    }                                                       // "hoje": ini = fim = ref
+    let inicio = iso(ini);
+    let fimS = iso(fim);
+    if (inicio < minDia) inicio = minDia;
+    if (fimS > maxDia) fimS = maxDia;
+    if (fimS < inicio) return null;
+    return { inicio, fim: fimS, minDia };
   }
 
   function periodoAnterior(p) {
@@ -883,7 +897,7 @@
     if (!tab) return;
     document.querySelectorAll("#periodoTabs .tab").forEach((x) => x.classList.remove("active"));
     tab.classList.add("active");
-    estado.dias = parseInt(tab.dataset.dias, 10);
+    estado.preset = tab.dataset.preset;
     estado.range = null;            // sai do modo personalizado
     render();
   });
@@ -900,7 +914,7 @@
   $("dataFim").addEventListener("change", aplicarDatas);
   $("dateClear").addEventListener("click", () => {
     estado.range = null;
-    const tab = document.querySelector(`#periodoTabs .tab[data-dias="${estado.dias}"]`);
+    const tab = document.querySelector(`#periodoTabs .tab[data-preset="${estado.preset}"]`);
     if (tab) tab.classList.add("active");
     render();
   });
