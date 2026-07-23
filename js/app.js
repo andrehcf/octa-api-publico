@@ -52,6 +52,30 @@
     },
   };
 
+  // Idem, mas rotula TODAS as barras (datasets agrupados) — valor arredondado.
+  const rotuloBarrasGrupo = {
+    id: "rotuloBarrasGrupo",
+    afterDatasetsDraw(chart) {
+      const ctx = chart.ctx;
+      const cor = getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#e6ebf5";
+      ctx.save();
+      ctx.font = "600 10px system-ui, -apple-system, sans-serif";
+      ctx.fillStyle = cor;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      chart.data.datasets.forEach((ds, di) => {
+        const meta = chart.getDatasetMeta(di);
+        if (!meta || meta.hidden || !meta.data) return;
+        meta.data.forEach((bar, i) => {
+          const v = ds.data[i];
+          if (v == null) return;
+          ctx.fillText(Math.round(v).toLocaleString("pt-BR"), bar.x, bar.y - 3);
+        });
+      });
+      ctx.restore();
+    },
+  };
+
   // ── Período selecionado ──
   // fim = último dia com dados; início = fim - dias + 1 (ou início da janela).
   function periodo() {
@@ -443,42 +467,6 @@
       plugins: [rotuloBarras],
     });
 
-    // TME por hora — tooltip estilo octa-api (TME médio/menor/maior, volume, analistas).
-    novoChart("chartTmeHora", {
-      type: "bar",
-      data: {
-        labels: hs.map((h) => `${h}h`),
-        datasets: [{
-          data: hs.map((h) => (tmePorHora[h].n ? tmePorHora[h].soma / tmePorHora[h].n / 60 : null)),
-          backgroundColor: "rgba(34,211,238,0.8)", borderRadius: 5, borderSkipped: false,
-        }],
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            displayColors: false,
-            callbacks: {
-              title: (items) => items[0].label,
-              label: (item) => {
-                const h = hs[item.dataIndex];
-                const t = tmePorHora[h];
-                const medio = t.n ? t.soma / t.n : null;
-                return [
-                  `TME médio: ${KPIS.fmtDuracao(medio)}`,
-                  `Menor TME: ${KPIS.fmtDuracao(tmeMinPorHora[h])}`,
-                  `Maior TME: ${KPIS.fmtDuracao(tmeMaxPorHora[h])}`,
-                  `Volume atendido: ${KPIS.fmtInt(t.n)}`,
-                  `Analistas: ${analistasPorHora[h].size}`,
-                ];
-              },
-            },
-          },
-        },
-        scales: { x: { grid: { color: GRID } }, y: { grid: { color: GRID }, beginAtZero: true } },
-      },
-    });
     novoChart("chartSerieHora", {
       type: "line",
       data: {
@@ -546,6 +534,7 @@
                 return [
                   `TME menor/maior: ${KPIS.fmtDuracao(tmeMinPorHora[h])} / ${KPIS.fmtDuracao(tmeMaxPorHora[h])}`,
                   `Volume atendido: ${KPIS.fmtInt(volPorHora[h])}`,
+                  `Analistas: ${analistasPorHora[h].size}`,
                 ];
               },
             },
@@ -559,6 +548,7 @@
             title: { display: true, text: "TMA (min)", color: "#6366f1", font: { size: 10 } } },
         },
       },
+      plugins: [rotuloBarrasGrupo],
     });
 
     // ── CSAT / Resolvidos por hora (barras agrupadas %) ──
@@ -594,6 +584,7 @@
           y: { beginAtZero: true, max: 100, grid: { color: GRID }, ticks: { callback: (v) => v + "%" } },
         },
       },
+      plugins: [rotuloBarrasGrupo],
     });
 
     // ── Engajamento por hora (respondidas; engajamento% e volume no tooltip) ──
