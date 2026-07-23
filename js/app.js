@@ -542,9 +542,9 @@
         },
         scales: {
           x: { grid: { color: GRID } },
-          yTme: { position: "left", beginAtZero: true, grid: { color: GRID },
+          yTme: { position: "left", beginAtZero: true, grace: "12%", grid: { color: GRID },
             title: { display: true, text: "TME (min)", color: "#10b981", font: { size: 10 } } },
-          yTma: { position: "right", beginAtZero: true, grid: { drawOnChartArea: false },
+          yTma: { position: "right", beginAtZero: true, grace: "12%", grid: { drawOnChartArea: false },
             title: { display: true, text: "TMA (min)", color: "#6366f1", font: { size: 10 } } },
         },
       },
@@ -581,7 +581,7 @@
         },
         scales: {
           x: { grid: { color: GRID } },
-          y: { beginAtZero: true, max: 100, grid: { color: GRID }, ticks: { callback: (v) => v + "%" } },
+          y: { beginAtZero: true, max: 115, grid: { color: GRID }, ticks: { stepSize: 20, callback: (v) => (v <= 100 ? v + "%" : "") } },
         },
       },
       plugins: [rotuloBarrasGrupo],
