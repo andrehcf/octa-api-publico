@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=30">
+<link rel="stylesheet" href="css/style.css?v=31">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -166,6 +166,37 @@
           </div>
         </div>
         <div class="chart-wrap"><canvas id="chartTmeHora"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-grid full">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">TME × TMA por hora</div>
+            <div class="card-subtitle">Tempo médio de espera (TME) e de atendimento (TMA) por hora do dia (min, BRT)</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartTmeTmaHora"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-grid half">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">CSAT / Resolvidos por hora</div>
+            <div class="card-subtitle">% de satisfação e de resolvidos por hora do dia (BRT)</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartCsatResolvHora"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Engajamento por hora</div>
+            <div class="card-subtitle">Pesquisas respondidas por hora — engajamento = respondidas ÷ atendidos</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartEngajHora"></canvas></div>
       </div>
     </div>
     <div class="chart-grid full">
@@ -402,9 +433,9 @@
 
 </main>
 
-<script src="js/config.js?v=30"></script>
-<script src="js/kpis.js?v=30"></script>
-<script src="js/api.js?v=30"></script>
-<script src="js/app.js?v=30"></script>
+<script src="js/config.js?v=31"></script>
+<script src="js/kpis.js?v=31"></script>
+<script src="js/api.js?v=31"></script>
+<script src="js/app.js?v=31"></script>
 </body>
 </html>

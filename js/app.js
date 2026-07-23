@@ -519,6 +519,117 @@
         },
       },
     });
+
+    // ── TME × TMA por hora (barras agrupadas, eixo duplo) — paridade com o octa-api v2 ──
+    novoChart("chartTmeTmaHora", {
+      type: "bar",
+      data: {
+        labels: hs.map((h) => `${h}h`),
+        datasets: [
+          { label: "TME", data: hs.map((h) => minH(tmePorHora[h])), yAxisID: "yTme",
+            backgroundColor: "rgba(16,185,129,0.6)", borderColor: "#10b981", borderWidth: 1, borderRadius: 4 },
+          { label: "TMA", data: hs.map((h) => minH(tmaPorHora[h])), yAxisID: "yTma",
+            backgroundColor: "rgba(99,102,241,0.55)", borderColor: "#6366f1", borderWidth: 1, borderRadius: 4 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: true, position: "top",
+            labels: { boxWidth: 12, usePointStyle: true, pointStyle: "rect", color: "#8893aa", font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : KPIS.fmtDuracao(ctx.parsed.y * 60)}`,
+              afterBody: (items) => {
+                const h = hs[items[0].dataIndex];
+                return [
+                  `TME menor/maior: ${KPIS.fmtDuracao(tmeMinPorHora[h])} / ${KPIS.fmtDuracao(tmeMaxPorHora[h])}`,
+                  `Volume atendido: ${KPIS.fmtInt(volPorHora[h])}`,
+                ];
+              },
+            },
+          },
+        },
+        scales: {
+          x: { grid: { color: GRID } },
+          yTme: { position: "left", beginAtZero: true, grid: { color: GRID },
+            title: { display: true, text: "TME (min)", color: "#10b981", font: { size: 10 } } },
+          yTma: { position: "right", beginAtZero: true, grid: { drawOnChartArea: false },
+            title: { display: true, text: "TMA (min)", color: "#6366f1", font: { size: 10 } } },
+        },
+      },
+    });
+
+    // ── CSAT / Resolvidos por hora (barras agrupadas %) ──
+    novoChart("chartCsatResolvHora", {
+      type: "bar",
+      data: {
+        labels: hs.map((h) => `${h}h`),
+        datasets: [
+          { label: "CSAT %", data: hs.map((h) => pctH(csatPorHora[h].sat, csatPorHora[h].resp)),
+            backgroundColor: "rgba(14,165,233,0.6)", borderColor: "#0ea5e9", borderWidth: 1, borderRadius: 4 },
+          { label: "Resolvidos %", data: hs.map((h) => pctH(csatPorHora[h].rsim, csatPorHora[h].rtot)),
+            backgroundColor: "rgba(20,184,166,0.55)", borderColor: "#14b8a6", borderWidth: 1, borderRadius: 4 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: true, position: "top",
+            labels: { boxWidth: 12, usePointStyle: true, pointStyle: "rect", color: "#8893aa", font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : KPIS.fmtPct(ctx.parsed.y)}`,
+              afterBody: (items) => {
+                const h = hs[items[0].dataIndex];
+                return [`Respondidas: ${KPIS.fmtInt(csatPorHora[h].resp)}`];
+              },
+            },
+          },
+        },
+        scales: {
+          x: { grid: { color: GRID } },
+          y: { beginAtZero: true, max: 100, grid: { color: GRID }, ticks: { callback: (v) => v + "%" } },
+        },
+      },
+    });
+
+    // ── Engajamento por hora (respondidas; engajamento% e volume no tooltip) ──
+    novoChart("chartEngajHora", {
+      type: "bar",
+      data: {
+        labels: hs.map((h) => `${h}h`),
+        datasets: [{
+          data: hs.map((h) => csatPorHora[h].resp),
+          backgroundColor: "rgba(167,139,250,0.7)", borderColor: "#a78bfa", borderWidth: 1, borderRadius: 5, borderSkipped: false,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            displayColors: false,
+            callbacks: {
+              title: (items) => items[0].label,
+              label: (item) => {
+                const h = hs[item.dataIndex];
+                const eng = pctH(csatPorHora[h].resp, volPorHora[h]);
+                return [
+                  `Respondidas: ${KPIS.fmtInt(csatPorHora[h].resp)}`,
+                  `Volume atendido: ${KPIS.fmtInt(volPorHora[h])}`,
+                  `Engajamento: ${eng == null ? "—" : KPIS.fmtPct(eng)}`,
+                ];
+              },
+            },
+          },
+        },
+        scales: { x: { grid: { color: GRID } }, y: { grid: { color: GRID }, beginAtZero: true } },
+      },
+      plugins: [rotuloBarras],
+    });
   }
 
   // ══════════════ TICKETS ══════════════
