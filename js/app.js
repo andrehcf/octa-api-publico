@@ -20,8 +20,17 @@
   const $ = (id) => document.getElementById(id);
 
   Chart.defaults.font = { family: "Inter", size: 11 };
-  Chart.defaults.color = "#8893aa";
-  const GRID = "rgba(255,255,255,0.05)";
+  // Cores de tema dos gráficos: lidas das variáveis CSS (--grid / --chart-text) para
+  // acompanhar claro/escuro. Reaplicadas a cada render() e no toggle (window.onThemeChange).
+  const cssVar = (nome, fb) => getComputedStyle(document.documentElement).getPropertyValue(nome).trim() || fb;
+  let GRID = "rgba(255,255,255,0.05)";
+  let CHART_TEXT = "#8893aa";
+  function aplicarTemaCharts() {
+    GRID = cssVar("--grid", "rgba(255,255,255,0.05)");
+    CHART_TEXT = cssVar("--chart-text", "#8893aa");
+    Chart.defaults.color = CHART_TEXT;
+  }
+  aplicarTemaCharts();
 
   function novoChart(id, cfg) {
     const el = $(id);
@@ -492,7 +501,7 @@
         interaction: { mode: "index", intersect: false },
         plugins: {
           legend: { display: true, position: "top",
-            labels: { boxWidth: 12, usePointStyle: true, pointStyle: "line", color: "#8893aa", font: { size: 11 } } },
+            labels: { boxWidth: 12, usePointStyle: true, pointStyle: "line", color: CHART_TEXT, font: { size: 11 } } },
           tooltip: { mode: "index", intersect: false },
         },
         scales: {
@@ -525,7 +534,7 @@
         interaction: { mode: "index", intersect: false },
         plugins: {
           legend: { display: true, position: "top",
-            labels: { boxWidth: 12, usePointStyle: true, pointStyle: "rect", color: "#8893aa", font: { size: 11 } } },
+            labels: { boxWidth: 12, usePointStyle: true, pointStyle: "rect", color: CHART_TEXT, font: { size: 11 } } },
           tooltip: {
             callbacks: {
               label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : KPIS.fmtDuracao(ctx.parsed.y * 60)}`,
@@ -568,7 +577,7 @@
         interaction: { mode: "index", intersect: false },
         plugins: {
           legend: { display: true, position: "top",
-            labels: { boxWidth: 12, usePointStyle: true, pointStyle: "rect", color: "#8893aa", font: { size: 11 } } },
+            labels: { boxWidth: 12, usePointStyle: true, pointStyle: "rect", color: CHART_TEXT, font: { size: 11 } } },
           tooltip: {
             callbacks: {
               label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : KPIS.fmtPct(ctx.parsed.y)}`,
@@ -887,6 +896,7 @@
 
   function render() {
     if (!estado.dados) return;
+    aplicarTemaCharts();   // GRID/texto dos gráficos acompanham o tema atual (claro/escuro)
     const [t, s] = TITULOS[estado.secao];
     $("pageTitle").textContent = t;
     $("pageSubtitle").textContent = s;
@@ -899,6 +909,10 @@
     RENDERS[estado.secao]();
     renderStatus();
   }
+
+  // O toggle de tema (script inline no index.html) chama isto após trocar data-theme:
+  // re-renderiza a seção ativa para os gráficos pegarem as novas cores (GRID/texto).
+  window.onThemeChange = render;
 
   // Sincroniza os campos de data: define limites [minDia, maxDia] e, em modo
   // preset, espelha o período calculado (ponto de partida para editar).

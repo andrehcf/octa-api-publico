@@ -4,7 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=33">
+<link rel="stylesheet" href="css/style.css?v=34">
+<script>
+  /* Anti-flash: aplica o tema salvo (ou o do sistema no 1º acesso) antes do render */
+  (function () {
+    try {
+      var saved = localStorage.getItem('cplug-theme');
+      var light = saved ? saved === 'light'
+        : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
+      if (light) document.documentElement.setAttribute('data-theme', 'light');
+    } catch (e) {}
+  })();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -44,6 +55,7 @@
   </nav>
   <div class="sidebar-footer" id="sidebarFooter">
     <div class="sync-status" id="syncStatus">Carregando…</div>
+    <button class="btn-theme" id="btnTheme" type="button" aria-label="Alternar tema"></button>
     <button class="btn-sair" id="btnSair">⎋ Sair</button>
   </div>
 </aside>
@@ -424,9 +436,30 @@
 
 </main>
 
-<script src="js/config.js?v=33"></script>
-<script src="js/kpis.js?v=33"></script>
-<script src="js/api.js?v=33"></script>
-<script src="js/app.js?v=33"></script>
+<script src="js/config.js?v=34"></script>
+<script src="js/kpis.js?v=34"></script>
+<script src="js/api.js?v=34"></script>
+<script src="js/app.js?v=34"></script>
+<script>
+  /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
+     e avisa o app (onThemeChange) para re-renderizar os gráficos. */
+  (function () {
+    var root = document.documentElement;
+    var btn = document.getElementById('btnTheme');
+    var isLight = function () { return root.getAttribute('data-theme') === 'light'; };
+    var rotular = function () {
+      if (btn) btn.textContent = isLight() ? '🌙 Modo escuro' : '☀ Modo claro';
+    };
+    rotular();
+    if (btn) btn.addEventListener('click', function () {
+      var paraClaro = !isLight();
+      if (paraClaro) root.setAttribute('data-theme', 'light');
+      else root.removeAttribute('data-theme');
+      try { localStorage.setItem('cplug-theme', paraClaro ? 'light' : 'dark'); } catch (e) {}
+      rotular();
+      if (window.onThemeChange) window.onThemeChange();
+    });
+  })();
+</script>
 </body>
 </html>
