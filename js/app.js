@@ -1128,15 +1128,26 @@
     $("loginScreen").classList.toggle("hidden", !mostrar);
   }
 
+  // Auto-refresh só roda enquanto a aba está VISÍVEL. Antes, uma aba deixada aberta
+  // (inclusive minimizada/à noite) batia no banco a cada REFRESH_MS 24/7 — foi o que
+  // multiplicou a carga que estourou o Disk IO. Ao voltar a ficar visível, atualiza na hora.
+  function pararRefresh() {
+    if (intervalo) { clearInterval(intervalo); intervalo = null; }
+  }
+  function iniciarRefresh() {
+    pararRefresh();
+    if (document.visibilityState === "visible") intervalo = setInterval(carregar, CONFIG.REFRESH_MS);
+  }
+
   async function iniciarSessao() {
     mostrarLogin(false);
     await documentoPronto;
     await carregar();
-    if (!intervalo) intervalo = setInterval(carregar, CONFIG.REFRESH_MS);
+    iniciarRefresh();
   }
 
   function encerrarSessao() {
-    if (intervalo) { clearInterval(intervalo); intervalo = null; }
+    pararRefresh();
     estado.dados = null;
     mostrarLogin(true);
   }
@@ -1168,5 +1179,13 @@
     if (agora === logado) return;
     logado = agora;
     setTimeout(() => { if (agora) iniciarSessao(); else encerrarSessao(); }, 0);
+  });
+
+  // Pausa o auto-refresh quando a aba fica oculta e retoma (com atualização imediata)
+  // quando volta a ficar visível — evita consultas 24/7 de abas esquecidas abertas.
+  document.addEventListener("visibilitychange", () => {
+    if (!logado) return;
+    if (document.visibilityState === "visible") { carregar(); iniciarRefresh(); }
+    else pararRefresh();
   });
 })();
