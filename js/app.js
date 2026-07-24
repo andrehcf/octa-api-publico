@@ -23,6 +23,9 @@
   // Cores de tema dos gráficos: lidas das variáveis CSS (--grid / --chart-text) para
   // acompanhar claro/escuro. Reaplicadas a cada render() e no toggle (window.onThemeChange).
   const cssVar = (nome, fb) => getComputedStyle(document.documentElement).getPropertyValue(nome).trim() || fb;
+  // Escapa string vinda do banco antes de injetar via innerHTML (defesa contra XSS).
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   let GRID = "rgba(255,255,255,0.05)";
   let CHART_TEXT = "#8893aa";
   function aplicarTemaCharts() {
@@ -382,7 +385,7 @@
     tabela.querySelector("tbody").innerHTML = cats.map((c) => {
       const tma = c.tma_n ? c.tma_soma_seg / c.tma_n : null;
       return `<tr>
-        <td>${c.categoria_nome}</td>
+        <td>${esc(c.categoria_nome)}</td>
         <td class="num">${KPIS.fmtInt(c.volume)}</td>
         <td class="num">${KPIS.fmtDuracao(tma)}</td>
         <td class="num">${c.csat_respondidos ? KPIS.fmtPct(100 * c.csat_satisfeitos / c.csat_respondidos) : "—"}</td>
@@ -703,7 +706,7 @@
     // Por formulário + SLA
     $("tabelaTktForm").querySelector("tbody").innerHTML = forms.map((r) => `
       <tr>
-        <td title="${r.form_name}">${r.form_name}</td>
+        <td title="${esc(r.form_name)}">${esc(r.form_name)}</td>
         <td class="num">${int(r.total)}</td>
         <td class="num">${int(r.em_aberto)}</td>
         <td class="num">${int(r.fechados)}</td>
@@ -716,7 +719,7 @@
     $("tabelaTktRanking").querySelector("tbody").innerHTML = ranking.map((r) => `
       <tr>
         <td class="num">${r.posicao}</td>
-        <td>${r.assigned_name}</td>
+        <td>${esc(r.assigned_name)}</td>
         <td class="num">${int(r.produtividade)}</td>
         <td class="num">${KPIS.fmtPct(100 * (r.qualidade_frac || 0))}</td>
         <td class="num">${r.sla_pct != null ? KPIS.fmtPct(r.sla_pct) : "—"}</td>
@@ -746,7 +749,7 @@
   async function popularTktFiltros() {
     let ops;
     try { ops = await API.ticketsOpcoes(); } catch (e) { console.error(e); return; }
-    const opt = (v, txt) => `<option value="${v}">${txt}</option>`;
+    const opt = (v, txt) => `<option value="${esc(v)}">${esc(txt)}</option>`;
     $("tktForm").innerHTML = opt("", "Todos os formulários") + (ops.forms || []).map((n) => opt(n, n)).join("");
     $("tktStatus").innerHTML = opt("", "Todos os status") + TKT_STATUS.map((s) => opt(s, s)).join("");
     $("tktAnalista").innerHTML = opt("", "Todos os analistas") + (ops.analistas || []).map((n) => opt(n, n)).join("");
@@ -807,7 +810,7 @@
     $("tabelaRanking").querySelector("tbody").innerHTML = analistas.map((a, i) => `
       <tr>
         <td><span class="pos-badge ${i < 3 ? "top" + (i + 1) : ""}">${i + 1}</span></td>
-        <td>${a.nome}</td>
+        <td>${esc(a.nome)}</td>
         <td class="num"><strong>${a.score.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</strong></td>
         <td class="num">${KPIS.fmtInt(a.volume)}</td>
         <td class="num">${KPIS.fmtPct(a.participacaoPct)}</td>
@@ -963,7 +966,7 @@
     estado.gruposFila = construirGruposFila();
     const g = estado.gruposFila;
     const optsDe = (dim) => g.filter((x) => x.dim === dim)
-      .map((x) => `<option value="${x.slug}">${x.label}</option>`).join("");
+      .map((x) => `<option value="${esc(x.slug)}">${esc(x.label)}</option>`).join("");
     // Três dropdowns independentes: Filas, Tags, Origem (mutuamente exclusivos).
     $("filaSelect").innerHTML = optsDe("fila");
     $("tagSelect").innerHTML = `<option value="">Tag…</option>` + optsDe("tag");

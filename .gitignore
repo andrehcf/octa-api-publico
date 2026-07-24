@@ -1,0 +1,13 @@
+# Segredos — NUNCA versionar (o .env real fica na pasta-pai, fora deste repo)
+.env
+.env.*
+*.key
+*.pem
+*.p12
+secrets.*
+service-account*.json
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+*.log
