@@ -629,7 +629,7 @@
             },
           },
         },
-        scales: { x: { grid: { color: GRID } }, y: { grid: { color: GRID }, beginAtZero: true } },
+        scales: { x: { grid: { color: GRID } }, y: { grid: { color: GRID }, beginAtZero: true, grace: "12%" } },
       },
       plugins: [rotuloBarras],
     });
