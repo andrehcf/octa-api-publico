@@ -950,15 +950,46 @@
     const fmt = fmtDt(si.executado_em);           // banco local → Supabase (nosso sync)
     const fmtOrigem = fmtDt(si.origem_sync_em);   // API Octadesk → banco local (sync do octa-api)
     $("footerAtualizado").textContent =
-      `Dados atualizados em ${fmt} · janela de ${si.janela_dias} dias · atualização automática a cada 5 min`;
+      `Dados atualizados em ${fmt} · janela de ${si.janela_dias} dias`;
     if (box) {
       const linha = (lbl, valor, iso) =>
         `<div class="sync-line"><span class="sync-head">` +
         `<span class="status-dot${stale12(iso) ? " stale" : ""}"></span> ${lbl}</span>` +
         `<b>${valor}</b></div>`;
-      box.innerHTML =
+      const linhaDot = (lbl, valor, cls) =>
+        `<div class="sync-line"><span class="sync-head">` +
+        `<span class="status-dot${cls ? " " + cls : ""}"></span> ${lbl}</span>` +
+        `<b>${valor}</b></div>`;
+      const fmtBytes = (b) => {
+        if (b == null) return "—";
+        if (b < 1024) return `${b} B`;
+        if (b < 1048576) return `${Math.round(b / 1024)} KB`;
+        if (b < 1073741824) return `${(b / 1048576).toFixed(1)} MB`;
+        return `${(b / 1073741824).toFixed(2)} GB`;
+      };
+      let html =
         linha("Banco Oficial:", fmtOrigem, si.origem_sync_em) +
         linha("Banco Supabase:", fmt, si.executado_em);
+
+      // Tamanho do banco (limite do plano free = 500 MB) — ponto verde/amarelo/vermelho por faixa.
+      const LIMITE_MB = 500;
+      if (si.db_size_bytes != null) {
+        const mb = si.db_size_bytes / 1048576;
+        const pct = (mb / LIMITE_MB) * 100;
+        const cls = pct >= 90 ? "crit" : pct >= 70 ? "stale" : "";
+        html += linhaDot("Tamanho:", `${mb.toFixed(0)} / ${LIMITE_MB} MB (${pct.toFixed(0)}%)`, cls);
+      }
+      // Saúde de IO: cache hit % (100% = servido da RAM) + temp gerado desde o último sync
+      // (sinal dos sorts em disco — o que disparou o alerta de Disk IO antes).
+      if (si.db_cache_hit_pct != null) {
+        const cache = Number(si.db_cache_hit_pct);
+        const delta = si.db_temp_bytes_delta;
+        const tempAlto = delta != null && delta > 209715200; // > 200 MB desde o último sync
+        const cls = cache < 95 || tempAlto ? "crit" : cache < 99 ? "stale" : "";
+        const tempTxt = delta != null ? ` · temp ${fmtBytes(delta)}` : "";
+        html += linhaDot("IO / cache:", `${cache.toFixed(1)}%${tempTxt}`, cls);
+      }
+      box.innerHTML = html;
     }
   }
 
