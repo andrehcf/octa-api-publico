@@ -6,6 +6,7 @@
 (() => {
   const estado = {
     dados: null,
+    perfil: null,      // {is_gestor, agent_id, agent_name, email} — define gestão vs analista
     preset: "hoje",    // hoje | ontem | semana (dom–sáb) | mes — âncora = último dia com dados
     range: null,       // {inicio, fim} quando período personalizado ativo
     fila: "todas",
@@ -14,6 +15,15 @@
     tkt: { form: "", status: "", analista: "", porFechamento: false },  // filtros de tickets
     tktExport: { forms: [], ranking: [] },                              // último resultado p/ CSV
   };
+
+  // Papel: analista = logado, autorizado, MAS não-gestão (vê só os próprios dados).
+  const ehAnalista = () => !!(estado.perfil && !estado.perfil.is_gestor);
+  // Fontes de categorias/horas que trocam para as RPCs por-analista no modo analista
+  // (mesma forma de retorno → os renders são reaproveitados sem alteração).
+  const fonteCategorias = (ini, fim, membros) =>
+    ehAnalista() ? API.categoriasPeriodoAnalista(ini, fim) : API.categoriasPeriodo(membros, ini, fim);
+  const fonteChatsHora = (ini, fim, membros) =>
+    ehAnalista() ? API.chatsHoraPeriodoAnalista(ini, fim) : API.chatsHoraPeriodo(membros, ini, fim);
 
   const charts = {};   // registry de instâncias Chart.js
 
@@ -372,7 +382,7 @@
     const membros = membrosDaFila(estado.fila);
     let cats;
     try {
-      cats = await API.categoriasPeriodo(membros, p.inicio, p.fim);
+      cats = await fonteCategorias(p.inicio, p.fim, membros);
     } catch (e) {
       console.error(e);
       return;
@@ -408,7 +418,7 @@
     const meuSeq = ++diaHoraReqSeq;
     let linhas;   // linhas agregadas por (dow, hora) vindas da RPC
     try {
-      linhas = await API.chatsHoraPeriodo(membrosDaFila(estado.fila), p.inicio, p.fim);
+      linhas = await fonteChatsHora(p.inicio, p.fim, membrosDaFila(estado.fila));
     } catch (e) {
       console.error(e);
       return;
@@ -780,7 +790,45 @@
 
   // ══════════════ RANKING ══════════════
 
+  // Modo analista: em vez do ranking de todos (dado da equipe, escondido por RLS),
+  // mostra só a POSIÇÃO do próprio analista no mês (via meu_ranking, sem vazar os outros).
+  async function renderRankingAnalista() {
+    const meses = [...new Set(estado.dados.chatsDia.map((r) => r.dia.slice(0, 8) + "01"))]
+      .sort().reverse();
+    const sel = $("rankingMes");
+    if (sel.options.length !== meses.length)
+      sel.innerHTML = meses.map((m) => `<option value="${m}">${KPIS.fmtMes(m)}</option>`).join("");
+    if (!estado.rankingMes || !meses.includes(estado.rankingMes)) estado.rankingMes = meses[0];
+    sel.value = estado.rankingMes;
+
+    const sub = $("subRanking");
+    const tbody = $("tabelaRanking").querySelector("tbody");
+    let r;
+    try {
+      r = await API.meuRanking(estado.rankingMes, CONFIG.PESOS, CONFIG.TMA_LIMITE_MIN);
+    } catch (e) { console.error(e); return; }
+    if (!r) {
+      if (sub) sub.textContent = "Sem dados no mês";
+      tbody.innerHTML = `<tr><td colspan="9" class="empty-note">Sem dados no mês</td></tr>`;
+      return;
+    }
+    if (sub) sub.textContent = `Sua posição no mês: #${r.posicao} de ${r.total} analistas`;
+    tbody.innerHTML = `
+      <tr>
+        <td><span class="pos-badge ${r.posicao <= 3 ? "top" + r.posicao : ""}">${r.posicao}</span></td>
+        <td>${esc(r.agent_name || "Você")}</td>
+        <td class="num"><strong>${(r.score || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</strong></td>
+        <td class="num">${KPIS.fmtInt(r.volume)}</td>
+        <td class="num">${KPIS.fmtPct(r.participacao_pct)}</td>
+        <td class="num">${KPIS.fmtPct(r.engajamento_pct)}</td>
+        <td class="num">${KPIS.fmtPct(r.csat_pct)}</td>
+        <td class="num">${KPIS.fmtPct(r.resolvidos_pct)}</td>
+        <td class="num">${r.tma_min != null ? KPIS.fmtDuracao(r.tma_min * 60) : "—"}</td>
+      </tr>`;
+  }
+
   function renderRanking() {
+    if (ehAnalista()) return renderRankingAnalista();
     const meses = [...new Set(estado.dados.agentesMes.map((r) => r.mes))].sort().reverse();
     const sel = $("rankingMes");
     if (sel.options.length !== meses.length) {
@@ -902,9 +950,12 @@
     aplicarTemaCharts();   // GRID/texto dos gráficos acompanham o tema atual (claro/escuro)
     const [t, s] = TITULOS[estado.secao];
     $("pageTitle").textContent = t;
-    $("pageSubtitle").textContent = s;
-    // Filtros de fila/tag/origem só se aplicam à seção Performance
-    { const vis = estado.secao === "performance" ? "visible" : "hidden";
+    // Analista: personaliza o subtítulo com o nome (mesmos gráficos, dados só dele).
+    const nome = estado.perfil && estado.perfil.agent_name;
+    $("pageSubtitle").textContent = ehAnalista() ? `Meus indicadores${nome ? " — " + nome : ""}` : s;
+    // Filtros de fila/tag/origem: só na Performance E só para a gestão (o analista vê o
+    // total dele em todas as filas — não escolhe segmento).
+    { const vis = (!ehAnalista() && estado.secao === "performance") ? "visible" : "hidden";
       $("filaSelect").style.visibility = vis;
       $("tagSelect").style.visibility = vis;
       $("origemSelect").style.visibility = vis; }
@@ -972,8 +1023,9 @@
         linha("Banco Supabase:", fmt, si.executado_em);
 
       // Tamanho do banco (limite do plano free = 500 MB) — ponto verde/amarelo/vermelho por faixa.
+      // Infra: só para a gestão (o analista não precisa/deve ver o status do banco).
       const LIMITE_MB = 500;
-      if (si.db_size_bytes != null) {
+      if (!ehAnalista() && si.db_size_bytes != null) {
         const mb = si.db_size_bytes / 1048576;
         const pct = (mb / LIMITE_MB) * 100;
         const cls = pct >= 90 ? "crit" : pct >= 70 ? "stale" : "";
@@ -981,7 +1033,7 @@
       }
       // Saúde de IO: cache hit % (100% = servido da RAM) + temp gerado desde o último sync
       // (sinal dos sorts em disco — o que disparou o alerta de Disk IO antes).
-      if (si.db_cache_hit_pct != null) {
+      if (!ehAnalista() && si.db_cache_hit_pct != null) {
         const cache = Number(si.db_cache_hit_pct);
         const delta = si.db_temp_bytes_delta;
         const tempAlto = delta != null && delta > 209715200; // > 200 MB desde o último sync
@@ -1017,10 +1069,18 @@
 
   async function carregar() {
     try {
-      estado.dados = await API.carregarTudo();
+      if (ehAnalista()) {
+        // Só os dados do próprio analista (RLS escopa); segmento único 'eu'.
+        estado.dados = await API.carregarTudoAnalista();
+        estado.gruposFila = [{ slug: "eu", label: "Meus indicadores", membros: ["eu"], dim: "fila" }];
+        estado.fila = "eu";
+        popularTktFiltros();   // formulários/status; o dropdown de analista fica escondido
+      } else {
+        estado.dados = await API.carregarTudo();
+        popularFilas();
+        popularTktFiltros();   // dropdowns de tickets (formulários/analistas via RPC)
+      }
       $("errorBanner").classList.add("hidden");
-      popularFilas();
-      popularTktFiltros();     // dropdowns de tickets (formulários/analistas via RPC)
       render();
     } catch (e) {
       console.error(e);
@@ -1164,11 +1224,33 @@
   async function iniciarSessao() {
     mostrarLogin(false);
     await documentoPronto;
+    // Busca o perfil ANTES de carregar: decide o modo (gestão vs analista) e a fonte
+    // de dados. Se falhar/for nulo, cai no modo gestão (a RLS ainda barra o que não pode).
+    try { estado.perfil = await API.meuPerfil(); }
+    catch (e) { console.error(e); estado.perfil = null; }
+    aplicarModoPapel();
     await carregar();
+  }
+
+  // Ajusta a navegação/UI conforme o papel: analista não vê Reincidência (não se aplica)
+  // e ganha a classe body.modo-analista (esconde dropdown de analista e ranking de tickets).
+  function aplicarModoPapel() {
+    const analista = ehAnalista();
+    document.body.classList.toggle("modo-analista", analista);
+    const navReinc = document.querySelector('.nav-item[data-section="reincidencia"]');
+    if (navReinc) navReinc.style.display = analista ? "none" : "";
+    if (analista && estado.secao === "reincidencia") {
+      estado.secao = "performance";
+      document.querySelectorAll(".nav-item").forEach((x) =>
+        x.classList.toggle("active", x.dataset.section === "performance"));
+      document.querySelectorAll(".section").forEach((s) =>
+        s.classList.toggle("active", s.id === "sec-performance"));
+    }
   }
 
   function encerrarSessao() {
     estado.dados = null;
+    estado.perfil = null;
     mostrarLogin(true);
   }
 

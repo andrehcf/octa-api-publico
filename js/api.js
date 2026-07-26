@@ -35,6 +35,55 @@ const API = (() => {
     return data || [];
   }
 
+  // ── Modo ANALISTA (isolamento por linha; escopo vem da RLS, não de argumento) ──
+  // Perfil do usuário logado (define o modo: gestão vê tudo, analista só o dele).
+  async function meuPerfil() {
+    const { data, error } = await cliente.rpc("meu_perfil");
+    if (error) throw new Error(`meu_perfil: ${error.message}`);
+    return data || null;   // {autorizado, is_gestor, agent_id, agent_name, email} | null
+  }
+
+  // Carrega os dados do próprio analista (tabelas agg_analista_*, escopadas por RLS) já
+  // no formato que os renders da equipe esperam: fila_slug 'eu' (segmento único).
+  async function carregarTudoAnalista() {
+    const [analistaDia, analistaTma, syncInfo] = await Promise.all([
+      tabela("agg_analista_dia", "dia,agent_id"),
+      tabela("agg_analista_tma_dist_dia", "dia,agent_id"),
+      tabela("sync_info", "id"),
+    ]);
+    return {
+      chatsDia: analistaDia.map((r) => ({ ...r, fila_slug: "eu", fila_label: "Meus indicadores" })),
+      tmaDistDia: analistaTma.map((r) => ({ ...r, fila_slug: "eu" })),
+      agentesMes: [],   // ranking do analista vem por meu_ranking (só a posição dele)
+      reincMes: [],     // reincidência não se aplica ao analista (seção escondida)
+      syncInfo: syncInfo[0] || null,
+    };
+  }
+
+  // Categorias/horas do próprio analista — mesma forma de retorno das RPCs da equipe.
+  async function categoriasPeriodoAnalista(inicio, fim) {
+    const { data, error } = await cliente.rpc("categorias_periodo_analista",
+      { p_ini: inicio, p_fim: fim });
+    if (error) throw new Error(`categorias_periodo_analista: ${error.message}`);
+    return data || [];
+  }
+  async function chatsHoraPeriodoAnalista(inicio, fim) {
+    const { data, error } = await cliente.rpc("chats_hora_periodo_analista",
+      { p_ini: inicio, p_fim: fim });
+    if (error) throw new Error(`chats_hora_periodo_analista: ${error.message}`);
+    return data || [];
+  }
+  // Posição do analista no ranking do mês (só a linha dele; pesos = os do front).
+  async function meuRanking(mes, pesos, tmaLimiteMin) {
+    const { data, error } = await cliente.rpc("meu_ranking", {
+      p_mes: mes,
+      p_w_volume: pesos.volume, p_w_eng: pesos.engajamento, p_w_csat: pesos.csat,
+      p_w_resolv: pesos.resolvidos, p_w_tma: pesos.tma, p_tma_limite_min: tmaLimiteMin,
+    });
+    if (error) throw new Error(`meu_ranking: ${error.message}`);
+    return (data && data[0]) || null;
+  }
+
   // Chats por hora agregados server-side (dow × hora, ≤168 linhas) para os gráficos
   // horários — evita baixar a tabela inteira (~19k). Chamada sob demanda no render.
   async function chatsHoraPeriodo(membros, inicio, fim) {
@@ -84,5 +133,8 @@ const API = (() => {
     carregarTudo, categoriasPeriodo, chatsHoraPeriodo, cliente,
     ticketsOpcoes, ticketsKpis, ticketsTimeseries,
     ticketsPorFormulario, ticketsPorStatus, ticketsRankingAnalistas,
+    // modo analista
+    meuPerfil, carregarTudoAnalista, categoriasPeriodoAnalista,
+    chatsHoraPeriodoAnalista, meuRanking,
   };
 })();

@@ -578,6 +578,13 @@ table.data td.num, table.data th.num { text-align: right; }
 .status-dot.stale { background: #fbbf24; }
 .status-dot.crit { background: #ef4444; }
 
+/* ══════ MODO ANALISTA (isolamento por linha) ══════ */
+/* Esconde o que só faz sentido para a gestão: filtro de analista e ranking de tickets
+   (o analista vê só os próprios dados). O grid de tickets vira uma coluna sem o ranking. */
+body.modo-analista #tktAnalista,
+body.modo-analista .analista-hide { display: none !important; }
+body.modo-analista .chart-grid.two-one { grid-template-columns: 1fr; }
+
 /* ══════ LOADING / ERRO ══════ */
 .loading-banner, .error-banner {
   padding: 12px 16px;
