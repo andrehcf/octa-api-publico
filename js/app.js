@@ -1067,6 +1067,7 @@
     $("origemSelect").value = s.startsWith("orig:") ? s : "";
   }
 
+  let ultimaCarga = 0;   // timestamp da última carga OK — evita refetch a cada troca de aba
   async function carregar() {
     try {
       if (ehAnalista()) {
@@ -1082,6 +1083,7 @@
       }
       $("errorBanner").classList.add("hidden");
       render();
+      ultimaCarga = Date.now();
     } catch (e) {
       console.error(e);
       $("errorBanner").textContent =
@@ -1283,9 +1285,12 @@
     setTimeout(() => { if (agora) iniciarSessao(); else encerrarSessao(); }, 0);
   });
 
-  // Sem polling periódico: os dados só mudam no sync (~3-4x/dia). Atualiza ao voltar
-  // pra aba (visibilitychange); recarregar a página (F5) força dados frescos na hora.
+  // Sem polling periódico e SEM refetch a cada troca de aba: os dados só mudam no sync
+  // (~1x/dia). Ao voltar pra aba, só recarrega se a última carga está VELHA (> 30 min) —
+  // evita rebater a cada alt-tab (economia de IO no Supabase). F5 sempre força dados frescos.
+  const REFRESH_VELHO_MS = 30 * 60 * 1000;
   document.addEventListener("visibilitychange", () => {
-    if (logado && document.visibilityState === "visible") carregar();
+    if (logado && document.visibilityState === "visible"
+        && Date.now() - ultimaCarga > REFRESH_VELHO_MS) carregar();
   });
 })();
