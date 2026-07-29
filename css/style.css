@@ -594,6 +594,8 @@ body.modo-analista .chart-grid.two-one { grid-template-columns: 1fr; }
 }
 .loading-banner { background: rgba(79,124,247,.1); border: 1px solid rgba(79,124,247,.25); }
 .error-banner { background: var(--danger-soft-bg); border: 1px solid var(--danger-soft-border); color: var(--danger-text); }
+/* Variante "offline/dados salvos" — âmbar, não vermelho (degradação graciosa) */
+.error-banner.offline { background: rgba(251,191,36,.10); border-color: rgba(251,191,36,.32); color: #fbbf24; }
 .hidden { display: none !important; }
 
 /* ══════ SCROLLBAR ══════ */

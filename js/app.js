@@ -1067,29 +1067,74 @@
     $("origemSelect").value = s.startsWith("orig:") ? s : "";
   }
 
+  // ── Cache local (degradação graciosa) ──
+  // Guarda o último carregamento OK no navegador. Se o Supabase estiver lento/fora, o
+  // painel mostra os últimos dados salvos (com aviso) em vez de tela em branco. Só reutiliza
+  // o cache do MESMO usuário; é limpo no logout (não vaza dado entre logins no mesmo PC).
+  const CACHE_KEY = "cplug-cache-dados";
+  function salvarCache() {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        ts: Date.now(), email: estado.perfil && estado.perfil.email, dados: estado.dados,
+      }));
+    } catch (e) { /* cota/serialização: cache é best-effort */ }
+  }
+  function lerCache() {
+    try {
+      const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+      if (!c || !c.dados || !estado.perfil || c.email !== estado.perfil.email) return null;
+      return c;
+    } catch (e) { return null; }
+  }
+  // Reconstrói os grupos de fila/segmento a partir de estado.dados (sem rede) — usado no
+  // load normal e no fallback do cache.
+  function reconstruirSegmentos() {
+    if (ehAnalista()) {
+      estado.gruposFila = [{ slug: "eu", label: "Meus indicadores", membros: ["eu"], dim: "fila" }];
+      estado.fila = "eu";
+    } else {
+      popularFilas();
+    }
+  }
+
   let ultimaCarga = 0;   // timestamp da última carga OK — evita refetch a cada troca de aba
   async function carregar() {
     try {
       if (ehAnalista()) {
-        // Só os dados do próprio analista (RLS escopa); segmento único 'eu'.
-        estado.dados = await API.carregarTudoAnalista();
-        estado.gruposFila = [{ slug: "eu", label: "Meus indicadores", membros: ["eu"], dim: "fila" }];
-        estado.fila = "eu";
+        estado.dados = await API.carregarTudoAnalista();   // RLS escopa ao próprio analista
+        reconstruirSegmentos();
         popularTktFiltros();   // formulários/status; o dropdown de analista fica escondido
       } else {
         estado.dados = await API.carregarTudo();
-        popularFilas();
+        reconstruirSegmentos();
         popularTktFiltros();   // dropdowns de tickets (formulários/analistas via RPC)
       }
       $("errorBanner").classList.add("hidden");
+      $("errorBanner").classList.remove("offline");
       render();
       ultimaCarga = Date.now();
+      salvarCache();                       // guarda p/ degradação graciosa
     } catch (e) {
       console.error(e);
-      $("errorBanner").textContent =
-        "Não foi possível carregar os dados. Tente novamente em instantes. (" + e.message + ")";
-      $("errorBanner").classList.remove("hidden");
-      $("syncStatus").textContent = "Erro ao carregar";
+      const cache = lerCache();
+      if (cache) {
+        // Supabase lento/fora → exibe o último dado salvo em vez de tela em branco.
+        estado.dados = cache.dados;
+        reconstruirSegmentos();
+        render();
+        const quando = new Date(cache.ts).toLocaleString("pt-BR",
+          { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+        const b = $("errorBanner");
+        b.textContent = `⚠ Sem conexão com o servidor agora — exibindo os últimos dados salvos (${quando}). Atualize (F5) quando o servidor voltar.`;
+        b.classList.add("offline");
+        b.classList.remove("hidden");
+      } else {
+        const b = $("errorBanner");
+        b.classList.remove("offline");
+        b.textContent = "Não foi possível carregar os dados. Tente novamente em instantes. (" + e.message + ")";
+        b.classList.remove("hidden");
+        $("syncStatus").textContent = "Erro ao carregar";
+      }
     }
   }
 
@@ -1253,6 +1298,7 @@
   function encerrarSessao() {
     estado.dados = null;
     estado.perfil = null;
+    try { localStorage.removeItem(CACHE_KEY); } catch (e) {}   // não vaza dado entre logins no mesmo PC
     mostrarLogin(true);
   }
 
