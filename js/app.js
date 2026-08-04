@@ -554,7 +554,6 @@
               afterBody: (items) => {
                 const h = hs[items[0].dataIndex];
                 return [
-                  `TME menor/maior: ${KPIS.fmtDuracao(tmeMinPorHora[h])} / ${KPIS.fmtDuracao(tmeMaxPorHora[h])}`,
                   `Volume atendido: ${KPIS.fmtInt(volPorHora[h])}`,
                   `Analistas: ${analistasPorHora[h].size}`,
                 ];
