@@ -54,7 +54,7 @@ const API = (() => {
     return {
       chatsDia: analistaDia.map((r) => ({ ...r, fila_slug: "eu", fila_label: "Meus indicadores" })),
       tmaDistDia: analistaTma.map((r) => ({ ...r, fila_slug: "eu" })),
-      agentesMes: [],   // ranking do analista vem por meu_ranking (só a posição dele)
+      agentesDia: [],   // ranking do analista vem por meu_ranking (só a posição dele)
       reincMes: [],     // reincidência não se aplica ao analista (seção escondida)
       syncInfo: syncInfo[0] || null,
     };
@@ -115,16 +115,16 @@ const API = (() => {
   // daqui — agora são a tabela-fato + RPCs, agregados server-side sob demanda.)
   async function carregarTudo() {
     const [
-      chatsDia, agentesMes, tmaDistDia, reincMes, syncInfo,
+      chatsDia, agentesDia, tmaDistDia, reincMes, syncInfo,
     ] = await Promise.all([
       tabela("agg_chats_dia", "dia,fila_slug"),
-      tabela("agg_agentes_mes", "mes,agent_id"),
+      tabela("agg_agentes_dia", "dia,agent_id"),
       tabela("agg_tma_distribuicao_dia", "dia,fila_slug"),
       tabela("agg_reincidencia_mes", "mes"),
       tabela("sync_info", "id"),
     ]);
     return {
-      chatsDia, agentesMes, tmaDistDia, reincMes,
+      chatsDia, agentesDia, tmaDistDia, reincMes,
       syncInfo: syncInfo[0] || null,
     };
   }

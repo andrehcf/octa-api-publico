@@ -792,6 +792,7 @@
   // Modo analista: em vez do ranking de todos (dado da equipe, escondido por RLS),
   // mostra só a POSIÇÃO do próprio analista no mês (via meu_ranking, sem vazar os outros).
   async function renderRankingAnalista() {
+    $("rankingMes").style.display = "";   // o analista escolhe o mês (meu_ranking é mensal)
     const meses = [...new Set(estado.dados.chatsDia.map((r) => r.dia.slice(0, 8) + "01"))]
       .sort().reverse();
     const sel = $("rankingMes");
@@ -826,23 +827,50 @@
       </tr>`;
   }
 
+  // Gestão: ranking geral no PERÍODO do filtro de data do topo (Hoje/Ontem/semana/
+  // mês + início/fim). Soma os dias de agg_agentes_dia por analista — mesmas colunas e
+  // Score de antes, só que agora recortado por data (não mais pelo mês fixo).
   function renderRanking() {
     if (ehAnalista()) return renderRankingAnalista();
-    const meses = [...new Set(estado.dados.agentesMes.map((r) => r.mes))].sort().reverse();
-    const sel = $("rankingMes");
-    if (sel.options.length !== meses.length) {
-      sel.innerHTML = meses.map((m) => `<option value="${m}">${KPIS.fmtMes(m)}</option>`).join("");
-    }
-    if (!estado.rankingMes || !meses.includes(estado.rankingMes)) estado.rankingMes = meses[0];
-    sel.value = estado.rankingMes;
+    $("rankingMes").style.display = "none";   // gestão usa o filtro de data do topo
 
-    const linhas = estado.dados.agentesMes.filter((r) => r.mes === estado.rankingMes);
-    const totalVolume = KPIS.soma(linhas, "volume") || 1;
+    const p = periodo();
+    const tbody = $("tabelaRanking").querySelector("tbody");
+    const sub = $("subRanking");
+    if (!p) {
+      if (sub) sub.textContent = "Sem dados";
+      tbody.innerHTML = `<tr><td colspan="9" class="empty-note">Sem dados</td></tr>`;
+      return;
+    }
+    if (sub) sub.textContent =
+      `Score ponderado · ${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)}`;
+
+    // Agrega os dias do período por analista (agent_id).
+    const porAgente = new Map();
+    for (const r of estado.dados.agentesDia) {
+      if (!entre(r.dia, p.inicio, p.fim)) continue;
+      let a = porAgente.get(r.agent_id);
+      if (!a) {
+        a = { nome: r.agent_name, volume: 0, tma_soma_seg: 0, tma_n: 0,
+              csat_respondidos: 0, csat_satisfeitos: 0, resolvidos_sim: 0, resolvidos_total: 0 };
+        porAgente.set(r.agent_id, a);
+      }
+      a.volume += r.volume || 0;
+      a.tma_soma_seg += r.tma_soma_seg || 0;
+      a.tma_n += r.tma_n || 0;
+      a.csat_respondidos += r.csat_respondidos || 0;
+      a.csat_satisfeitos += r.csat_satisfeitos || 0;
+      a.resolvidos_sim += r.resolvidos_sim || 0;
+      a.resolvidos_total += r.resolvidos_total || 0;
+    }
+
+    const linhas = [...porAgente.values()];
+    const totalVolume = linhas.reduce((s, a) => s + a.volume, 0) || 1;
 
     const analistas = linhas.map((r) => {
       const tmaMin = r.tma_n ? r.tma_soma_seg / r.tma_n / 60 : null;
       const a = {
-        nome: r.agent_name,
+        nome: r.nome,
         volume: r.volume,
         participacaoPct: 100 * r.volume / totalVolume,
         engajamentoPct: r.volume > 0 ? 100 * r.csat_respondidos / r.volume : null,
@@ -854,7 +882,7 @@
       return a;
     }).sort((a, b) => b.score - a.score);
 
-    $("tabelaRanking").querySelector("tbody").innerHTML = analistas.map((a, i) => `
+    tbody.innerHTML = analistas.map((a, i) => `
       <tr>
         <td><span class="pos-badge ${i < 3 ? "top" + (i + 1) : ""}">${i + 1}</span></td>
         <td>${esc(a.nome)}</td>
@@ -865,7 +893,7 @@
         <td class="num">${KPIS.fmtPct(a.csatPct)}</td>
         <td class="num">${KPIS.fmtPct(a.resolvidosPct)}</td>
         <td class="num">${a.tmaMin !== null ? KPIS.fmtDuracao(a.tmaMin * 60) : "—"}</td>
-      </tr>`).join("") || `<tr><td colspan="9" class="empty-note">Sem dados</td></tr>`;
+      </tr>`).join("") || `<tr><td colspan="9" class="empty-note">Sem dados no período</td></tr>`;
   }
 
   // ══════════════ REINCIDÊNCIA ══════════════
@@ -940,7 +968,7 @@
     performance: ["Performance de Atendimento", "KPIs de chats — volume, tempos, qualidade"],
     tickets: ["Tickets", "Fluxo, formulários e status"],
     categorias: ["Por Categoria", "Volume, TMA e CSAT por categoria de atendimento"],
-    ranking: ["Ranking de Analistas", "Score ponderado mensal"],
+    ranking: ["Ranking de Analistas", "Score ponderado — filtre por data"],
     reincidencia: ["Reincidência", "Clientes que retornaram em até 7 dias"],
   };
 
