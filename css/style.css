@@ -525,6 +525,15 @@ table.data td {
 }
 table.data tr:last-child td { border-bottom: none; }
 table.data td.num, table.data th.num { text-align: right; }
+
+/* Ranking: controles do card + cabeçalhos clicáveis (ordenação) */
+.ranking-controls { display: flex; align-items: center; gap: 8px; }
+#tabelaRanking thead th[data-col] { cursor: pointer; user-select: none; }
+#tabelaRanking thead th[data-col]:hover { color: var(--text); }
+#tabelaRanking thead th[data-col]::after { content: "\2195"; opacity: .3; margin-left: 5px; }
+#tabelaRanking thead th.sort-asc::after  { content: "\2191"; opacity: .95; color: var(--accent); }
+#tabelaRanking thead th.sort-desc::after { content: "\2193"; opacity: .95; color: var(--accent); }
+
 .pos-badge {
   display: inline-flex;
   align-items: center;

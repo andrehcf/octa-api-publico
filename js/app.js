@@ -12,6 +12,8 @@
     fila: "todas",
     secao: "performance",
     rankingMes: null,
+    rankingSort: { col: "score", dir: "desc" },  // ordenação da tabela de ranking (gestão)
+    rankingRows: [],                             // analistas agregados do período (p/ re-ordenar/exportar)
     tkt: { form: "", status: "", analista: "", porFechamento: false },  // filtros de tickets
     tktExport: { forms: [], ranking: [] },                              // último resultado p/ CSV
   };
@@ -793,6 +795,7 @@
   // mostra só a POSIÇÃO do próprio analista no mês (via meu_ranking, sem vazar os outros).
   async function renderRankingAnalista() {
     $("rankingMes").style.display = "";   // o analista escolhe o mês (meu_ranking é mensal)
+    $("btnExportRanking").style.display = "none";   // exportar/ordenar é só na visão da gestão
     const meses = [...new Set(estado.dados.chatsDia.map((r) => r.dia.slice(0, 8) + "01"))]
       .sort().reverse();
     const sel = $("rankingMes");
@@ -867,7 +870,7 @@
     const linhas = [...porAgente.values()];
     const totalVolume = linhas.reduce((s, a) => s + a.volume, 0) || 1;
 
-    const analistas = linhas.map((r) => {
+    estado.rankingRows = linhas.map((r) => {
       const tmaMin = r.tma_n ? r.tma_soma_seg / r.tma_n / 60 : null;
       const a = {
         nome: r.nome,
@@ -880,11 +883,45 @@
       };
       a.score = KPIS.scoreRanking(a, CONFIG.PESOS, CONFIG.TMA_LIMITE_MIN);
       return a;
-    }).sort((a, b) => b.score - a.score);
+    });
+    $("btnExportRanking").style.display = "";   // gestão pode exportar a lista
+    pintarRanking();
+  }
 
-    tbody.innerHTML = analistas.map((a, i) => `
+  // Colunas ordenáveis: data-col do <th> → valor + tipo (nulos vão sempre p/ o fim).
+  const RANKING_COLS = {
+    nome:         { get: (a) => a.nome,            tipo: "txt" },
+    score:        { get: (a) => a.score,           tipo: "num" },
+    volume:       { get: (a) => a.volume,          tipo: "num" },
+    participacao: { get: (a) => a.participacaoPct, tipo: "num" },
+    engajamento:  { get: (a) => a.engajamentoPct,  tipo: "num" },
+    csat:         { get: (a) => a.csatPct,         tipo: "num" },
+    resolvidos:   { get: (a) => a.resolvidosPct,   tipo: "num" },
+    tma:          { get: (a) => a.tmaMin,          tipo: "num" },
+  };
+
+  function ordenarRanking(rows) {
+    const { col, dir } = estado.rankingSort;
+    const def = RANKING_COLS[col] || RANKING_COLS.score;
+    const mul = dir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const va = def.get(a), vb = def.get(b);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;      // nulo sempre por último, independente da direção
+      if (vb == null) return -1;
+      if (def.tipo === "txt") return mul * String(va).localeCompare(String(vb), "pt-BR");
+      return mul * (va - vb);
+    });
+  }
+
+  // (Re)desenha o corpo do ranking na ordem atual + as setas nos cabeçalhos.
+  function pintarRanking() {
+    const rows = ordenarRanking(estado.rankingRows);
+    estado.rankingSorted = rows;   // ordem exibida → a exportação bate com a tela
+    const ehRankScore = estado.rankingSort.col === "score" && estado.rankingSort.dir === "desc";
+    $("tabelaRanking").querySelector("tbody").innerHTML = rows.map((a, i) => `
       <tr>
-        <td><span class="pos-badge ${i < 3 ? "top" + (i + 1) : ""}">${i + 1}</span></td>
+        <td><span class="pos-badge ${ehRankScore && i < 3 ? "top" + (i + 1) : ""}">${i + 1}</span></td>
         <td>${esc(a.nome)}</td>
         <td class="num"><strong>${a.score.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</strong></td>
         <td class="num">${KPIS.fmtInt(a.volume)}</td>
@@ -894,6 +931,12 @@
         <td class="num">${KPIS.fmtPct(a.resolvidosPct)}</td>
         <td class="num">${a.tmaMin !== null ? KPIS.fmtDuracao(a.tmaMin * 60) : "—"}</td>
       </tr>`).join("") || `<tr><td colspan="9" class="empty-note">Sem dados no período</td></tr>`;
+
+    $("tabelaRanking").querySelectorAll("thead th[data-col]").forEach((th) => {
+      const ativa = th.dataset.col === estado.rankingSort.col;
+      th.classList.toggle("sort-asc", ativa && estado.rankingSort.dir === "asc");
+      th.classList.toggle("sort-desc", ativa && estado.rankingSort.dir === "desc");
+    });
   }
 
   // ══════════════ REINCIDÊNCIA ══════════════
@@ -1262,6 +1305,32 @@
         (100 * (r.qualidade_frac || 0)).toFixed(2),
         r.sla_pct != null ? r.sla_pct.toFixed(1) : "",
         (r.media_final != null ? r.media_final.toFixed(2) : ""),
+      ]));
+  });
+
+  // ── Ranking (gestão): ordenar por clique no cabeçalho + exportar p/ Excel ──
+  $("tabelaRanking").querySelector("thead").addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-col]");
+    if (!th || ehAnalista()) return;
+    const col = th.dataset.col;
+    if (estado.rankingSort.col === col) {
+      estado.rankingSort.dir = estado.rankingSort.dir === "asc" ? "desc" : "asc";
+    } else {
+      estado.rankingSort = { col, dir: "asc" };   // nova coluna começa crescente
+    }
+    pintarRanking();
+  });
+  $("btnExportRanking").addEventListener("click", () => {
+    const p = periodo();
+    const per = p ? `${p.inicio}_a_${p.fim}` : "periodo";
+    const num1 = (v) => (v == null ? "" : v.toFixed(1).replace(".", ","));
+    baixarCSV(`ranking_analistas_${per}.csv`,
+      ["#", "Analista", "Score", "Volume", "Participação (%)", "Engajamento (%)",
+       "CSAT (%)", "Resolvidos (%)", "TMA (min)"],
+      (estado.rankingSorted || []).map((a, i) => [
+        i + 1, a.nome, num1(a.score), a.volume,
+        num1(a.participacaoPct), num1(a.engajamentoPct),
+        num1(a.csatPct), num1(a.resolvidosPct), num1(a.tmaMin),
       ]));
   });
 
