@@ -800,7 +800,7 @@
     const tbody = $("tabelaRanking").querySelector("tbody");
     if (!p) {
       if (sub) sub.textContent = "Sem dados";
-      tbody.innerHTML = `<tr><td colspan="9" class="empty-note">Sem dados</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="empty-note">Sem dados</td></tr>`;
       return;
     }
     const per = `${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)}`;
@@ -810,7 +810,7 @@
     } catch (e) { console.error(e); return; }
     if (!r) {
       if (sub) sub.textContent = `Sem dados · ${per}`;
-      tbody.innerHTML = `<tr><td colspan="9" class="empty-note">Sem dados no período</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="empty-note">Sem dados no período</td></tr>`;
       return;
     }
     if (sub) sub.textContent = `Sua posição: #${r.posicao} de ${r.total} · ${per}`;
@@ -818,7 +818,6 @@
       <tr>
         <td><span class="pos-badge ${r.posicao <= 3 ? "top" + r.posicao : ""}">${r.posicao}</span></td>
         <td>${esc(r.agent_name || "Você")}</td>
-        <td class="num"><strong>${(r.score || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</strong></td>
         <td class="num">${KPIS.fmtInt(r.volume)}</td>
         <td class="num">${KPIS.fmtPct(r.participacao_pct)}</td>
         <td class="num">${KPIS.fmtPct(r.engajamento_pct)}</td>
@@ -839,7 +838,7 @@
     const sub = $("subRanking");
     if (!p) {
       if (sub) sub.textContent = "Sem dados";
-      tbody.innerHTML = `<tr><td colspan="9" class="empty-note">Sem dados</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="empty-note">Sem dados</td></tr>`;
       return;
     }
     if (sub) sub.textContent =
@@ -920,14 +919,13 @@
       <tr>
         <td><span class="pos-badge ${ehRankScore && i < 3 ? "top" + (i + 1) : ""}">${i + 1}</span></td>
         <td>${esc(a.nome)}</td>
-        <td class="num"><strong>${a.score.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</strong></td>
         <td class="num">${KPIS.fmtInt(a.volume)}</td>
         <td class="num">${KPIS.fmtPct(a.participacaoPct)}</td>
         <td class="num">${KPIS.fmtPct(a.engajamentoPct)}</td>
         <td class="num">${KPIS.fmtPct(a.csatPct)}</td>
         <td class="num">${KPIS.fmtPct(a.resolvidosPct)}</td>
         <td class="num">${a.tmaMin !== null ? KPIS.fmtDuracao(a.tmaMin * 60) : "—"}</td>
-      </tr>`).join("") || `<tr><td colspan="9" class="empty-note">Sem dados no período</td></tr>`;
+      </tr>`).join("") || `<tr><td colspan="8" class="empty-note">Sem dados no período</td></tr>`;
 
     $("tabelaRanking").querySelectorAll("thead th[data-col]").forEach((th) => {
       const ativa = th.dataset.col === estado.rankingSort.col;
@@ -1317,10 +1315,10 @@
     const per = p ? `${p.inicio}_a_${p.fim}` : "periodo";
     const num1 = (v) => (v == null ? "" : v.toFixed(1).replace(".", ","));
     baixarCSV(`ranking_analistas_${per}.csv`,
-      ["#", "Analista", "Score", "Volume", "Participação (%)", "Engajamento (%)",
+      ["#", "Analista", "Volume", "Participação (%)", "Engajamento (%)",
        "CSAT (%)", "Resolvidos (%)", "TMA (min)"],
       (estado.rankingSorted || []).map((a, i) => [
-        i + 1, a.nome, num1(a.score), a.volume,
+        i + 1, a.nome, a.volume,
         num1(a.participacaoPct), num1(a.engajamentoPct),
         num1(a.csatPct), num1(a.resolvidosPct), num1(a.tmaMin),
       ]));
