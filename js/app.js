@@ -13,7 +13,7 @@
     secao: "performance",
     rankingSort: { col: "score", dir: "desc" },  // ordenação da tabela de ranking (gestão)
     rankingRows: [],                             // analistas agregados do período (p/ re-ordenar/exportar)
-    tkt: { form: "", status: "", analista: "", porFechamento: false },  // filtros de tickets
+    tkt: { form: "", status: "", analista: "", issue: "todos", porFechamento: false },  // filtros de tickets
     tktExport: { forms: [], ranking: [] },                              // último resultado p/ CSV
   };
 
@@ -658,6 +658,7 @@
       forms: t.form ? [t.form] : [],
       status: t.status ? [t.status] : [],
       analistas: t.analista ? [t.analista] : [],
+      issue: t.issue || "todos",
       ini: p.inicio, fim: p.fim, porFechamento: t.porFechamento,
     };
     const pAnt = periodoAnterior(p);
@@ -1269,6 +1270,7 @@
   $("tktForm").addEventListener("change", (e) => { estado.tkt.form = e.target.value; renderTickets(); });
   $("tktStatus").addEventListener("change", (e) => { estado.tkt.status = e.target.value; renderTickets(); });
   $("tktAnalista").addEventListener("change", (e) => { estado.tkt.analista = e.target.value; renderTickets(); });
+  $("tktIssue").addEventListener("change", (e) => { estado.tkt.issue = e.target.value; renderTickets(); });
   $("tktModoTabs").addEventListener("click", (e) => {
     const btn = e.target.closest(".tab");
     if (!btn) return;

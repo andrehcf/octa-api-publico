@@ -103,6 +103,7 @@ const API = (() => {
   const _tktParams = (f) => ({
     p_forms: f.forms || [], p_status: f.status || [], p_analistas: f.analistas || [],
     p_ini: f.ini, p_fim: f.fim, p_por_fechamento: !!f.porFechamento,
+    p_issue: f.issue || "todos",
   });
   const ticketsOpcoes         = ()  => _rpc("tickets_opcoes", {});                                  // {forms, analistas}
   const ticketsKpis           = (f) => _rpc("tickets_kpis", _tktParams(f)).then((d) => (d && d[0]) || {});
