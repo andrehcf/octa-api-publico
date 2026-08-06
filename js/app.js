@@ -11,7 +11,6 @@
     range: null,       // {inicio, fim} quando período personalizado ativo
     fila: "todas",
     secao: "performance",
-    rankingMes: null,
     rankingSort: { col: "score", dir: "desc" },  // ordenação da tabela de ranking (gestão)
     rankingRows: [],                             // analistas agregados do período (p/ re-ordenar/exportar)
     tkt: { form: "", status: "", analista: "", porFechamento: false },  // filtros de tickets
@@ -792,30 +791,29 @@
   // ══════════════ RANKING ══════════════
 
   // Modo analista: em vez do ranking de todos (dado da equipe, escondido por RLS),
-  // mostra só a POSIÇÃO do próprio analista no mês (via meu_ranking, sem vazar os outros).
+  // mostra só a POSIÇÃO do próprio analista NO PERÍODO do filtro de data (via
+  // meu_ranking_periodo — calcula o rank de todos server-side, devolve só a linha dele).
   async function renderRankingAnalista() {
-    $("rankingMes").style.display = "";   // o analista escolhe o mês (meu_ranking é mensal)
     $("btnExportRanking").style.display = "none";   // exportar/ordenar é só na visão da gestão
-    const meses = [...new Set(estado.dados.chatsDia.map((r) => r.dia.slice(0, 8) + "01"))]
-      .sort().reverse();
-    const sel = $("rankingMes");
-    if (sel.options.length !== meses.length)
-      sel.innerHTML = meses.map((m) => `<option value="${m}">${KPIS.fmtMes(m)}</option>`).join("");
-    if (!estado.rankingMes || !meses.includes(estado.rankingMes)) estado.rankingMes = meses[0];
-    sel.value = estado.rankingMes;
-
+    const p = periodo();
     const sub = $("subRanking");
     const tbody = $("tabelaRanking").querySelector("tbody");
-    let r;
-    try {
-      r = await API.meuRanking(estado.rankingMes, CONFIG.PESOS, CONFIG.TMA_LIMITE_MIN);
-    } catch (e) { console.error(e); return; }
-    if (!r) {
-      if (sub) sub.textContent = "Sem dados no mês";
-      tbody.innerHTML = `<tr><td colspan="9" class="empty-note">Sem dados no mês</td></tr>`;
+    if (!p) {
+      if (sub) sub.textContent = "Sem dados";
+      tbody.innerHTML = `<tr><td colspan="9" class="empty-note">Sem dados</td></tr>`;
       return;
     }
-    if (sub) sub.textContent = `Sua posição no mês: #${r.posicao} de ${r.total} analistas`;
+    const per = `${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)}`;
+    let r;
+    try {
+      r = await API.meuRankingPeriodo(p.inicio, p.fim, CONFIG.PESOS, CONFIG.TMA_LIMITE_MIN);
+    } catch (e) { console.error(e); return; }
+    if (!r) {
+      if (sub) sub.textContent = `Sem dados · ${per}`;
+      tbody.innerHTML = `<tr><td colspan="9" class="empty-note">Sem dados no período</td></tr>`;
+      return;
+    }
+    if (sub) sub.textContent = `Sua posição: #${r.posicao} de ${r.total} · ${per}`;
     tbody.innerHTML = `
       <tr>
         <td><span class="pos-badge ${r.posicao <= 3 ? "top" + r.posicao : ""}">${r.posicao}</span></td>
@@ -835,7 +833,6 @@
   // Score de antes, só que agora recortado por data (não mais pelo mês fixo).
   function renderRanking() {
     if (ehAnalista()) return renderRankingAnalista();
-    $("rankingMes").style.display = "none";   // gestão usa o filtro de data do topo
 
     const p = periodo();
     const tbody = $("tabelaRanking").querySelector("tbody");
@@ -1268,11 +1265,6 @@
     $("filaSelect").value = "todas";
     $("tagSelect").value = "";
     render();
-  });
-
-  $("rankingMes").addEventListener("change", (e) => {
-    estado.rankingMes = e.target.value;
-    renderRanking();
   });
 
   // ── Filtros de Tickets (formulário/status/analista + toggle abertura/fechamento) ──

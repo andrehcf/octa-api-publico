@@ -54,7 +54,7 @@ const API = (() => {
     return {
       chatsDia: analistaDia.map((r) => ({ ...r, fila_slug: "eu", fila_label: "Meus indicadores" })),
       tmaDistDia: analistaTma.map((r) => ({ ...r, fila_slug: "eu" })),
-      agentesDia: [],   // ranking do analista vem por meu_ranking (só a posição dele)
+      agentesDia: [],   // ranking do analista vem por meu_ranking_periodo (só a posição dele)
       reincMes: [],     // reincidência não se aplica ao analista (seção escondida)
       syncInfo: syncInfo[0] || null,
     };
@@ -74,13 +74,13 @@ const API = (() => {
     return data || [];
   }
   // Posição do analista no ranking do mês (só a linha dele; pesos = os do front).
-  async function meuRanking(mes, pesos, tmaLimiteMin) {
-    const { data, error } = await cliente.rpc("meu_ranking", {
-      p_mes: mes,
+  async function meuRankingPeriodo(ini, fim, pesos, tmaLimiteMin) {
+    const { data, error } = await cliente.rpc("meu_ranking_periodo", {
+      p_ini: ini, p_fim: fim,
       p_w_volume: pesos.volume, p_w_eng: pesos.engajamento, p_w_csat: pesos.csat,
       p_w_resolv: pesos.resolvidos, p_w_tma: pesos.tma, p_tma_limite_min: tmaLimiteMin,
     });
-    if (error) throw new Error(`meu_ranking: ${error.message}`);
+    if (error) throw new Error(`meu_ranking_periodo: ${error.message}`);
     return (data && data[0]) || null;
   }
 
@@ -135,6 +135,6 @@ const API = (() => {
     ticketsPorFormulario, ticketsPorStatus, ticketsRankingAnalistas,
     // modo analista
     meuPerfil, carregarTudoAnalista, categoriasPeriodoAnalista,
-    chatsHoraPeriodoAnalista, meuRanking,
+    chatsHoraPeriodoAnalista, meuRankingPeriodo,
   };
 })();
