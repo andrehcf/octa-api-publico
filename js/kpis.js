@@ -26,6 +26,8 @@ const KPIS = {
     const semAtender = this.soma(rows, "fechados_sem_atender");
     const respondidos = this.soma(rows, "csat_respondidos");
     const satisfeitos = this.soma(rows, "csat_satisfeitos");
+    // CSAT alinhado ao octa-api/BI: média das notas ÷ 5 × 100 (um 4 pesa menos que um 5).
+    const csatMedia = this.mediaPonderada(rows, "csat_soma_score", "csat_n");
     const resolvSim = this.soma(rows, "resolvidos_sim");
     const resolvTotal = this.soma(rows, "resolvidos_total");
     return {
@@ -34,9 +36,9 @@ const KPIS = {
       tmaN: this.soma(rows, "tma_n"),
       tmeSeg: this.mediaPonderada(rows, "tme_soma_seg", "tme_n"),
       tmaSeg: this.mediaPonderada(rows, "tma_soma_seg", "tma_n"),
-      csatMedia: this.mediaPonderada(rows, "csat_soma_score", "csat_n"),
+      csatMedia,
       abandonoPct: fechados > 0 ? (100 * semAtender / fechados) : null,
-      csatPct: respondidos > 0 ? (100 * satisfeitos / respondidos) : null,
+      csatPct: csatMedia != null ? (csatMedia / 5 * 100) : null,
       resolvidosPct: resolvTotal > 0 ? (100 * resolvSim / resolvTotal) : null,
       engajamentoPct: volume > 0 ? (100 * respondidos / volume) : null,
     };

@@ -399,7 +399,7 @@
         <td>${esc(c.categoria_nome)}</td>
         <td class="num">${KPIS.fmtInt(c.volume)}</td>
         <td class="num">${KPIS.fmtDuracao(tma)}</td>
-        <td class="num">${c.csat_respondidos ? KPIS.fmtPct(100 * c.csat_satisfeitos / c.csat_respondidos) : "—"}</td>
+        <td class="num">${c.csat_respondidos ? KPIS.fmtPct((c.csat_soma_score / c.csat_respondidos) / 5 * 100) : "—"}</td>
         <td class="num">${KPIS.fmtInt(c.csat_respondidos)}</td>
       </tr>`;
     }).join("") || `<tr><td colspan="5" class="empty-note">Sem dados no período</td></tr>`;
@@ -430,7 +430,7 @@
     const grade = Array.from({ length: 7 }, () => Array(24).fill(0));
     const tmePorHora = Array.from({ length: 24 }, () => ({ soma: 0, n: 0 }));
     const tmaPorHora = Array.from({ length: 24 }, () => ({ soma: 0, n: 0 }));
-    const csatPorHora = Array.from({ length: 24 }, () => ({ resp: 0, sat: 0, rsim: 0, rtot: 0 }));
+    const csatPorHora = Array.from({ length: 24 }, () => ({ resp: 0, sat: 0, soma: 0, rsim: 0, rtot: 0 }));
     const volPorHora = Array(24).fill(0);
     const tmeMinPorHora = Array(24).fill(null);   // menor TME (min dos mínimos diários)
     const tmeMaxPorHora = Array(24).fill(null);   // maior TME (max dos máximos diários)
@@ -445,6 +445,7 @@
       const c = csatPorHora[r.hora];
       c.resp += r.csat_respondidos || 0;
       c.sat += r.csat_satisfeitos || 0;
+      c.soma += r.csat_soma_score || 0;
       c.rsim += r.resolvidos_sim || 0;
       c.rtot += r.resolvidos_total || 0;
       if (r.tme_min_seg != null)
@@ -502,7 +503,7 @@
             borderColor: "#f59e0b", tension: 0.4, pointRadius: 0, borderWidth: 2, yAxisID: "yMin" },
           { label: "TME (min)", data: hs.map((h) => minH(tmePorHora[h])),
             borderColor: "#2dd4bf", borderDash: [5, 4], tension: 0.4, pointRadius: 0, borderWidth: 2, yAxisID: "yMin" },
-          { label: "CSAT %", data: hs.map((h) => pctH(csatPorHora[h].sat, csatPorHora[h].resp)),
+          { label: "CSAT %", data: hs.map((h) => (csatPorHora[h].resp ? (csatPorHora[h].soma / csatPorHora[h].resp) / 5 * 100 : null)),
             borderColor: "#22d3ee", borderDash: [5, 4], tension: 0.4, pointRadius: 0, borderWidth: 2, yAxisID: "yPct" },
           { label: "Resolvidos %", data: hs.map((h) => pctH(csatPorHora[h].rsim, csatPorHora[h].rtot)),
             borderColor: "#4ade80", borderDash: [5, 4], tension: 0.4, pointRadius: 0, borderWidth: 2, yAxisID: "yPct" },
@@ -579,7 +580,7 @@
       data: {
         labels: hs.map((h) => `${h}h`),
         datasets: [
-          { label: "CSAT %", data: hs.map((h) => pctH(csatPorHora[h].sat, csatPorHora[h].resp)),
+          { label: "CSAT %", data: hs.map((h) => (csatPorHora[h].resp ? (csatPorHora[h].soma / csatPorHora[h].resp) / 5 * 100 : null)),
             backgroundColor: "rgba(14,165,233,0.6)", borderColor: "#0ea5e9", borderWidth: 1, borderRadius: 4 },
           { label: "Resolvidos %", data: hs.map((h) => pctH(csatPorHora[h].rsim, csatPorHora[h].rtot)),
             backgroundColor: "rgba(20,184,166,0.55)", borderColor: "#14b8a6", borderWidth: 1, borderRadius: 4 },
@@ -852,7 +853,8 @@
       let a = porAgente.get(r.agent_id);
       if (!a) {
         a = { nome: r.agent_name, volume: 0, tma_soma_seg: 0, tma_n: 0,
-              csat_respondidos: 0, csat_satisfeitos: 0, resolvidos_sim: 0, resolvidos_total: 0 };
+              csat_respondidos: 0, csat_satisfeitos: 0, csat_soma_score: 0,
+              resolvidos_sim: 0, resolvidos_total: 0 };
         porAgente.set(r.agent_id, a);
       }
       a.volume += r.volume || 0;
@@ -860,6 +862,7 @@
       a.tma_n += r.tma_n || 0;
       a.csat_respondidos += r.csat_respondidos || 0;
       a.csat_satisfeitos += r.csat_satisfeitos || 0;
+      a.csat_soma_score += r.csat_soma_score || 0;
       a.resolvidos_sim += r.resolvidos_sim || 0;
       a.resolvidos_total += r.resolvidos_total || 0;
     }
@@ -874,7 +877,7 @@
         volume: r.volume,
         participacaoPct: 100 * r.volume / totalVolume,
         engajamentoPct: r.volume > 0 ? 100 * r.csat_respondidos / r.volume : null,
-        csatPct: r.csat_respondidos > 0 ? 100 * r.csat_satisfeitos / r.csat_respondidos : null,
+        csatPct: r.csat_respondidos > 0 ? (r.csat_soma_score / r.csat_respondidos) / 5 * 100 : null,
         resolvidosPct: r.resolvidos_total > 0 ? 100 * r.resolvidos_sim / r.resolvidos_total : null,
         tmaMin,
       };
