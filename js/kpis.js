@@ -63,7 +63,7 @@ const KPIS = {
     return v === null || v === undefined ? "—" : Number(v).toLocaleString("pt-BR");
   },
 
-  fmtPct(v, casas = 1) {
+  fmtPct(v, casas = 2) {
     if (v === null || v === undefined) return "—";
     return v.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas }) + "%";
   },
@@ -134,6 +134,6 @@ const KPIS = {
     const bom = inverso ? !subiu : subiu;
     const cls = subiu ? (bom ? "delta-up" : "delta-up-bad") : (bom ? "delta-down-good" : "delta-down");
     const pct = Math.abs(100 * diff / anterior);
-    return `<span class="${cls}">${subiu ? "▲" : "▼"} ${pct.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>`;
+    return `<span class="${cls}">${subiu ? "▲" : "▼"} ${pct.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>`;
   },
 };

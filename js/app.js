@@ -246,9 +246,9 @@
     setar("kpiVolume", KPIS.fmtInt(k.volume));
     setar("kpiTme", KPIS.fmtDuracao(k.tmeSeg));
     setar("kpiTma", KPIS.fmtDuracao(k.tmaSeg));
-    setar("kpiAbandono", KPIS.fmtPct(k.abandonoPct, 1));
-    setar("kpiCsat", KPIS.fmtPct(k.csatPct, 1));
-    setar("kpiResolvidos", KPIS.fmtPct(k.resolvidosPct, 1));
+    setar("kpiAbandono", KPIS.fmtPct(k.abandonoPct, 2));
+    setar("kpiCsat", KPIS.fmtPct(k.csatPct, 2));
+    setar("kpiResolvidos", KPIS.fmtPct(k.resolvidosPct, 2));
 
     // Delta % relativo (estilo octa-api)
     setarH("kpiVolumeDelta", KPIS.deltaPctHtml(k.volume, kAnt.volume));
@@ -262,9 +262,9 @@
     setar("kpiVolumeAnt", KPIS.fmtInt(kAnt.volume));
     setar("kpiTmeAnt", KPIS.fmtDuracao(kAnt.tmeSeg));
     setar("kpiTmaAnt", KPIS.fmtDuracao(kAnt.tmaSeg));
-    setar("kpiAbandonoAnt", KPIS.fmtPct(kAnt.abandonoPct, 1));
-    setar("kpiCsatAnt", KPIS.fmtPct(kAnt.csatPct, 1));
-    setar("kpiResolvidosAnt", KPIS.fmtPct(kAnt.resolvidosPct, 1));
+    setar("kpiAbandonoAnt", KPIS.fmtPct(kAnt.abandonoPct, 2));
+    setar("kpiCsatAnt", KPIS.fmtPct(kAnt.csatPct, 2));
+    setar("kpiResolvidosAnt", KPIS.fmtPct(kAnt.resolvidosPct, 2));
 
     // Rodapé de contexto (igual octa-api)
     setar("kpiVolumeFoot", `de ${KPIS.fmtInt(k.transferidos)} transferidos`);
@@ -1108,7 +1108,7 @@
         const tempAlto = delta != null && delta > 209715200; // > 200 MB desde o último sync
         const cls = cache < 95 || tempAlto ? "crit" : cache < 99 ? "stale" : "";
         const tempTxt = delta != null ? ` · temp ${fmtBytes(delta)}` : "";
-        html += linhaDot("IO / cache:", `${cache.toFixed(1)}%${tempTxt}`, cls);
+        html += linhaDot("IO / cache:", `${cache.toFixed(2)}%${tempTxt}`, cls);
       }
       box.innerHTML = html;
     }
@@ -1289,7 +1289,7 @@
         r.form_name, r.total, r.em_aberto, r.fechados,
         r.tma_mediana_h != null ? r.tma_mediana_h.toFixed(1) : "",
         r.alvo_horas != null ? r.alvo_horas : "",
-        r.pct_dentro_sla != null ? r.pct_dentro_sla.toFixed(1) : "",
+        r.pct_dentro_sla != null ? r.pct_dentro_sla.toFixed(2) : "",
       ]));
   });
   $("btnExportTktRanking").addEventListener("click", () => {
@@ -1298,7 +1298,7 @@
       (estado.tktExport.ranking || []).map((r) => [
         r.posicao, r.assigned_name, r.produtividade,
         (100 * (r.qualidade_frac || 0)).toFixed(2),
-        r.sla_pct != null ? r.sla_pct.toFixed(1) : "",
+        r.sla_pct != null ? r.sla_pct.toFixed(2) : "",
         (r.media_final != null ? r.media_final.toFixed(2) : ""),
       ]));
   });
@@ -1318,14 +1318,15 @@
   $("btnExportRanking").addEventListener("click", () => {
     const p = periodo();
     const per = p ? `${p.inicio}_a_${p.fim}` : "periodo";
-    const num1 = (v) => (v == null ? "" : v.toFixed(1).replace(".", ","));
+    const num1 = (v) => (v == null ? "" : v.toFixed(1).replace(".", ","));   // minutos (TMA)
+    const num2 = (v) => (v == null ? "" : v.toFixed(2).replace(".", ","));   // percentuais (2 casas)
     baixarCSV(`ranking_analistas_${per}.csv`,
       ["#", "Analista", "Volume", "Participação (%)", "Engajamento (%)",
        "CSAT (%)", "Resolvidos (%)", "TMA (min)"],
       (estado.rankingSorted || []).map((a, i) => [
         i + 1, a.nome, a.volume,
-        num1(a.participacaoPct), num1(a.engajamentoPct),
-        num1(a.csatPct), num1(a.resolvidosPct), num1(a.tmaMin),
+        num2(a.participacaoPct), num2(a.engajamentoPct),
+        num2(a.csatPct), num2(a.resolvidosPct), num1(a.tmaMin),
       ]));
   });
 
