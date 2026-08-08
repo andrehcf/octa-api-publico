@@ -764,7 +764,9 @@
     const opt = (v, txt) => `<option value="${esc(v)}">${esc(txt)}</option>`;
     $("tktForm").innerHTML = opt("", "Todos os formulários") + (ops.forms || []).map((n) => opt(n, n)).join("");
     $("tktStatus").innerHTML = opt("", "Todos os status") + TKT_STATUS.map((s) => opt(s, s)).join("");
-    $("tktAnalista").innerHTML = opt("", "Todos os analistas") + (ops.analistas || []).map((n) => opt(n, n)).join("");
+    // analistas = [{id, nome}] — value = assigned_id (o filtro casa todos os tickets da
+    // pessoa, mesmo renomeada no Octadesk); label = nome atual.
+    $("tktAnalista").innerHTML = opt("", "Todos os analistas") + (ops.analistas || []).map((a) => opt(a.id, a.nome)).join("");
   }
 
   // Download client-side de CSV (separador ';' + BOM p/ abrir certo no Excel pt-BR).
