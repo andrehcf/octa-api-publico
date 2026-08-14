@@ -447,12 +447,14 @@
     const tmaPorHora = Array.from({ length: 24 }, () => ({ soma: 0, n: 0 }));
     const csatPorHora = Array.from({ length: 24 }, () => ({ resp: 0, sat: 0, soma: 0, rsim: 0, rtot: 0 }));
     const volPorHora = Array(24).fill(0);
+    const abandonoPorHora = Array(24).fill(0);    // chats fechados sem resposta do atendente
     const tmeMinPorHora = Array(24).fill(null);   // menor TME (min dos mínimos diários)
     const tmeMaxPorHora = Array(24).fill(null);   // maior TME (max dos máximos diários)
     const analistasPorHora = Array.from({ length: 24 }, () => new Set());  // distintos no período
     for (const r of linhas) {
       grade[r.dow][r.hora] += r.volume;             // dow (0=Dom) já vem do banco
       volPorHora[r.hora] += r.volume;
+      abandonoPorHora[r.hora] += r.abandono || 0;
       tmePorHora[r.hora].soma += r.tme_soma_seg || 0;
       tmePorHora[r.hora].n += r.tme_n || 0;
       tmaPorHora[r.hora].soma += r.tma_soma_seg || 0;
@@ -557,6 +559,8 @@
             backgroundColor: "rgba(16,185,129,0.6)", borderColor: "#10b981", borderWidth: 1, borderRadius: 4 },
           { label: "TMA", data: hs.map((h) => minH(tmaPorHora[h])), yAxisID: "yTma",
             backgroundColor: "rgba(99,102,241,0.55)", borderColor: "#6366f1", borderWidth: 1, borderRadius: 4 },
+          { label: "Abandonos", data: hs.map((h) => abandonoPorHora[h] || 0), yAxisID: "yAband",
+            backgroundColor: "rgba(244,63,94,0.55)", borderColor: "#f43f5e", borderWidth: 1, borderRadius: 4 },
         ],
       },
       options: {
@@ -567,7 +571,9 @@
             labels: { boxWidth: 12, usePointStyle: true, pointStyle: "rect", color: CHART_TEXT, font: { size: 11 } } },
           tooltip: {
             callbacks: {
-              label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : KPIS.fmtDuracao(ctx.parsed.y * 60)}`,
+              label: (ctx) => ctx.dataset.label === "Abandonos"
+                ? `Abandonos: ${KPIS.fmtInt(ctx.parsed.y || 0)}`
+                : `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : KPIS.fmtDuracao(ctx.parsed.y * 60)}`,
               afterBody: (items) => {
                 const h = hs[items[0].dataIndex];
                 return [
@@ -584,6 +590,7 @@
             title: { display: true, text: "TME (min)", color: "#10b981", font: { size: 10 } } },
           yTma: { position: "right", beginAtZero: true, grace: "12%", grid: { drawOnChartArea: false },
             title: { display: true, text: "TMA (min)", color: "#6366f1", font: { size: 10 } } },
+          yAband: { position: "right", display: false, beginAtZero: true, grid: { drawOnChartArea: false } },
         },
       },
       plugins: [rotuloBarrasGrupo],
