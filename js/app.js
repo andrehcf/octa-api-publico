@@ -1023,8 +1023,130 @@
     return r ? r.fila_label : slug;
   }
 
+  // ── Bot (fase pré-humana): contenção/resolução do bot antes de cair na fila. ──
+  // Lê agg_bot_dia (dia×canal) e agg_bot_hora (dia×hora), soma o período no cliente.
+  function renderBot() {
+    const p = periodo();
+    if (!p) return;
+    const setar = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+    const setarH = (id, h) => { const el = $(id); if (el) el.innerHTML = h; };
+    const pct = (a, b) => (b ? 100 * a / b : null);
+    const int = (x) => KPIS.fmtInt(x || 0);
+    const pctTxt = (x) => (x == null ? "—" : KPIS.fmtPct(x));
+
+    const somar = (rows) => {
+      const t = { volume: 0, bot_only: 0, resolvido_bot: 0, transferido: 0, woz: 0, woz_resolvido: 0, tempo_soma: 0, tempo_n: 0 };
+      for (const r of rows) {
+        t.volume += r.volume || 0; t.bot_only += r.bot_only || 0;
+        t.resolvido_bot += r.resolvido_bot || 0; t.transferido += r.transferido || 0;
+        t.woz += r.woz || 0; t.woz_resolvido += r.woz_resolvido || 0;
+        t.tempo_soma += r.tempo_bot_soma_seg || 0; t.tempo_n += r.tempo_bot_n || 0;
+      }
+      return t;
+    };
+    const rows = (estado.dados.botDia || []).filter((r) => entre(r.dia, p.inicio, p.fim));
+    const k = somar(rows);
+    const pAnt = periodoAnterior(p);
+    const kAnt = pAnt ? somar((estado.dados.botDia || []).filter((r) => entre(r.dia, pAnt.inicio, pAnt.fim))) : {};
+
+    const contencao = pct(k.bot_only, k.volume), contencaoAnt = pct(kAnt.bot_only, kAnt.volume);
+    const resolucao = pct(k.resolvido_bot, k.volume), resolucaoAnt = pct(kAnt.resolvido_bot, kAnt.volume);
+    const transfer = pct(k.transferido, k.volume), transferAnt = pct(kAnt.transferido, kAnt.volume);
+    const tempoMin = k.tempo_n ? k.tempo_soma / k.tempo_n / 60 : null;
+
+    setar("kpiBotVolume", int(k.volume));
+    setarH("kpiBotVolumeDelta", KPIS.deltaPctHtml(k.volume, kAnt.volume));
+    setar("kpiBotVolumeAnt", int(kAnt.volume));
+    setar("kpiBotVolumeFoot", `${int(k.bot_only)} contidas · ${int(k.transferido)} transferidas`);
+    setar("kpiBotContencao", pctTxt(contencao));
+    setarH("kpiBotContencaoDelta", KPIS.deltaPctHtml(contencao, contencaoAnt));
+    setar("kpiBotContencaoAnt", pctTxt(contencaoAnt));
+    setar("kpiBotContencaoFoot", `${int(k.bot_only)} de ${int(k.volume)} conversas`);
+    setar("kpiBotResolucao", pctTxt(resolucao));
+    setarH("kpiBotResolucaoDelta", KPIS.deltaPctHtml(resolucao, resolucaoAnt));
+    setar("kpiBotResolucaoAnt", pctTxt(resolucaoAnt));
+    setar("kpiBotResolucaoFoot", `${int(k.resolvido_bot)} resolvidas pelo bot`);
+    setar("kpiBotTransfer", pctTxt(transfer));
+    setarH("kpiBotTransferDelta", KPIS.deltaPctHtml(transfer, transferAnt, true));
+    setar("kpiBotTransferAnt", pctTxt(transferAnt));
+    setar("kpiBotTransferFoot", `${int(k.transferido)} caíram na fila humana`);
+    setar("kpiBotTempo", tempoMin == null ? "—" : KPIS.fmtDuracao(tempoMin * 60));
+    setar("kpiBotTempoFoot", `média de ${int(k.tempo_n)} contidas fechadas`);
+    setar("kpiBotWoz", pctTxt(pct(k.woz, k.volume)));
+    setar("kpiBotWozFoot", k.woz ? `${int(k.woz)} conversas · ${pctTxt(pct(k.woz_resolvido, k.woz))} resolvidas` : "sem uso no período");
+
+    // Evolução diária: volume (barras) + contenção % (linha, eixo direito)
+    const porDia = new Map();
+    for (const r of rows) {
+      let d = porDia.get(r.dia); if (!d) { d = { volume: 0, bot_only: 0 }; porDia.set(r.dia, d); }
+      d.volume += r.volume || 0; d.bot_only += r.bot_only || 0;
+    }
+    const dias = [...porDia.keys()].sort();
+    novoChart("chartBotDia", {
+      type: "bar",
+      data: {
+        labels: dias.map((x) => KPIS.fmtDiaCurto(x)),
+        datasets: [
+          { label: "Volume", data: dias.map((x) => porDia.get(x).volume), yAxisID: "yVol",
+            backgroundColor: "rgba(79,124,247,0.55)", borderColor: "#4f7cf7", borderWidth: 1, borderRadius: 4 },
+          { type: "line", label: "Contenção %", data: dias.map((x) => pct(porDia.get(x).bot_only, porDia.get(x).volume)),
+            yAxisID: "yPct", borderColor: "#34d399", backgroundColor: "rgba(52,211,153,0.08)", tension: 0.4, pointRadius: 2, fill: true },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+        plugins: { legend: { display: false }, tooltip: { mode: "index", intersect: false, callbacks: {
+          label: (ctx) => ctx.dataset.label === "Contenção %"
+            ? `Contenção: ${ctx.parsed.y == null ? "—" : KPIS.fmtPct(ctx.parsed.y)}`
+            : `Volume: ${KPIS.fmtInt(ctx.parsed.y)}` } } },
+        scales: {
+          x: { grid: { color: GRID } },
+          yVol: { position: "left", beginAtZero: true, grid: { color: GRID } },
+          yPct: { position: "right", beginAtZero: true, max: 100, grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + "%" } },
+        },
+      },
+    });
+
+    // Por canal (tabela)
+    const porCanal = new Map();
+    for (const r of rows) {
+      let c = porCanal.get(r.canal); if (!c) { c = { volume: 0, bot_only: 0, resolvido_bot: 0 }; porCanal.set(r.canal, c); }
+      c.volume += r.volume || 0; c.bot_only += r.bot_only || 0; c.resolvido_bot += r.resolvido_bot || 0;
+    }
+    const tb = $("tabelaBotCanal");
+    if (tb) tb.querySelector("tbody").innerHTML =
+      [...porCanal.entries()].sort((a, b) => b[1].volume - a[1].volume).map(([canal, c]) => `
+        <tr>
+          <td>${esc(canal)}</td>
+          <td class="num">${int(c.volume)}</td>
+          <td class="num">${int(c.bot_only)}</td>
+          <td class="num">${pctTxt(pct(c.bot_only, c.volume))}</td>
+          <td class="num">${pctTxt(pct(c.resolvido_bot, c.volume))}</td>
+        </tr>`).join("") || `<tr><td colspan="5" class="empty-note">Sem dados no período</td></tr>`;
+
+    // Por hora do dia (barras agrupadas: volume × contidas)
+    const volH = Array(24).fill(0), boH = Array(24).fill(0);
+    for (const r of (estado.dados.botHora || [])) {
+      if (!entre(r.dia, p.inicio, p.fim)) continue;
+      volH[r.hora] += r.volume || 0; boH[r.hora] += r.bot_only || 0;
+    }
+    const hs = Array.from({ length: 24 }, (_, h) => h);
+    novoChart("chartBotHora", {
+      type: "bar",
+      data: {
+        labels: hs.map((h) => `${h}h`),
+        datasets: [
+          { label: "Volume", data: hs.map((h) => volH[h]), backgroundColor: "rgba(79,124,247,0.55)", borderColor: "#4f7cf7", borderWidth: 1, borderRadius: 4 },
+          { label: "Contidas", data: hs.map((h) => boH[h]), backgroundColor: "rgba(52,211,153,0.6)", borderColor: "#34d399", borderWidth: 1, borderRadius: 4 },
+        ],
+      },
+      options: opts({ y: { beginAtZero: true, grace: "10%" } }),
+    });
+  }
+
   const RENDERS = {
     performance: () => { renderPerformance(); renderDiaHora(); renderDistTma(); renderCategoriasPerf(); },
+    bot: renderBot,
     tickets: renderTickets,
     categorias: renderCategorias,
     ranking: renderRanking,
@@ -1033,6 +1155,7 @@
 
   const TITULOS = {
     performance: ["Performance de Atendimento", "KPIs de chats — volume, tempos, qualidade"],
+    bot: ["Bot", "Contenção e resolução do bot — conversas antes de cair na fila humana"],
     tickets: ["Tickets", "Fluxo, formulários e status"],
     categorias: ["Por Categoria", "Volume, TMA e CSAT por categoria de atendimento"],
     ranking: ["Ranking de Analistas", "Score ponderado — filtre por data"],
