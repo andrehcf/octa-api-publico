@@ -549,7 +549,8 @@
       },
     });
 
-    // ── TME × TMA por hora (barras agrupadas, eixo duplo) — paridade com o octa-api v2 ──
+    // ── TME × TMA × Abandonos por hora (barras agrupadas; min nos eixos TME/TMA, contagem
+    //    de abandono em eixo próprio oculto yAband) — paridade com o octa-api v2 ──
     novoChart("chartTmeTmaHora", {
       type: "bar",
       data: {
