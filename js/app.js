@@ -356,6 +356,21 @@
     if (stats) stats.innerHTML =
       `${periodoLbl} · ${filaLabel(estado.fila)} · Média <b>${min1(media)}</b> · ` +
       `P50 <b>${min1(p50)}</b> · P90 <b>${min1(p90)}</b> · P95 <b>${min1(p95)}</b> · n <b>${KPIS.fmtInt(n)}</b>`;
+    // Tooltip enriquecido: "N chats (X% do total)" + "Até aqui: Y%" (acumulado da
+    // esquerda até a barra). Lê os counts do próprio dataset (já agregados no sync).
+    const tmaOpts = opts({ y: { beginAtZero: true, grace: "12%" } });
+    tmaOpts.plugins.tooltip.callbacks = {
+      label: (ctx) => {
+        const cs = ctx.chart.data.datasets[0].data;
+        const tot = cs.reduce((a, b) => a + (b || 0), 0);
+        const val = ctx.parsed.y || 0;
+        const pct = tot ? (val / tot * 100).toFixed(2) : "0.00";
+        let cum = 0;
+        for (let i = 0; i <= ctx.dataIndex; i++) cum += (cs[i] || 0);
+        const cumPct = tot ? (cum / tot * 100).toFixed(2) : "0.00";
+        return [`${KPIS.fmtInt(val)} chats (${pct}% do total)`, `Até aqui: ${cumPct}%`];
+      },
+    };
     novoChart("chartTmaDistP", {
       type: "bar",
       data: {
@@ -365,7 +380,7 @@
           backgroundColor: "rgba(139,92,246,0.8)", borderRadius: 7, borderSkipped: false,
         }],
       },
-      options: opts({ y: { beginAtZero: true, grace: "12%" } }),
+      options: tmaOpts,
       plugins: [rotuloBarras],
     });
   }
