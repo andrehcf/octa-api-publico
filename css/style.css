@@ -482,6 +482,7 @@ body {
 .chart-grid.half { grid-template-columns: 1fr 1fr; }
 .chart-grid.full { grid-template-columns: 1fr; }
 .chart-grid.two-one { grid-template-columns: 2fr 1fr; }
+.chart-grid.one-two { grid-template-columns: 1fr 2fr; }
 
 .card {
   background: var(--surface);
@@ -656,7 +657,7 @@ body.modo-analista .chart-grid.two-one { grid-template-columns: 1fr; }
   .main { padding: 16px 14px 48px; }
   .topbar-right { width: 100%; }
   .kpi-grid, .kpi-grid.cols-4, .kpi-grid.cols-5 { grid-template-columns: repeat(2, 1fr); }
-  .chart-grid, .chart-grid.half, .chart-grid.two-one { grid-template-columns: 1fr; }
+  .chart-grid, .chart-grid.half, .chart-grid.two-one, .chart-grid.one-two { grid-template-columns: 1fr; }
   .chart-grid > :last-child { grid-column: auto; }
   .heatmap { font-size: 8px; }
 }
