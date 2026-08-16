@@ -1355,6 +1355,34 @@
     }
   }
 
+  // ── Tooltip dos ícones "i" dos KPIs (hoje só na seção Bot) ──
+  // A caixa é anexada ao <body> porque o card tem overflow:hidden (cortaria um ::after).
+  // Delegação no document: funciona p/ qualquer .kpi-info[data-tip], em hover, foco e toque.
+  (function initKpiTips() {
+    let tip = null;
+    const mostrar = (el) => {
+      if (!tip) { tip = document.createElement("div"); tip.className = "kpi-tip"; document.body.appendChild(tip); }
+      tip.innerHTML = el.dataset.tip || "";
+      tip.classList.add("show");
+      const r = el.getBoundingClientRect(), t = tip.getBoundingClientRect();
+      let left = r.left + r.width / 2 - t.width / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - t.width - 8));
+      let top = r.top - t.height - 8;
+      if (top < 8) top = r.bottom + 8;                 // sem espaço acima → mostra abaixo
+      tip.style.left = `${left}px`; tip.style.top = `${top}px`;
+    };
+    const esconder = () => { if (tip) tip.classList.remove("show"); };
+    document.addEventListener("mouseover", (e) => { const el = e.target.closest(".kpi-info"); if (el) mostrar(el); });
+    document.addEventListener("mouseout", (e) => { if (e.target.closest(".kpi-info")) esconder(); });
+    document.addEventListener("focusin", (e) => { const el = e.target.closest(".kpi-info"); if (el) mostrar(el); });
+    document.addEventListener("focusout", (e) => { if (e.target.closest(".kpi-info")) esconder(); });
+    document.addEventListener("click", (e) => {       // toque no mobile: abre; toque fora: fecha
+      const el = e.target.closest(".kpi-info");
+      if (el) { e.stopPropagation(); mostrar(el); } else esconder();
+    });
+    window.addEventListener("scroll", esconder, true);
+  })();
+
   // ── Eventos ──
   $("nav").addEventListener("click", (e) => {
     const item = e.target.closest(".nav-item");

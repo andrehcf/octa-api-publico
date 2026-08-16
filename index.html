@@ -8,7 +8,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://dholqliulwtnrsjgxjqp.supabase.co https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="no-referrer">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=55">
+<link rel="stylesheet" href="css/style.css?v=56">
 <script>
   /* Anti-flash: aplica o tema salvo (ou o do sistema no 1º acesso) antes do render */
   (function () {
@@ -237,37 +237,37 @@
   <section class="section" id="sec-bot">
     <div class="kpi-grid">
       <div class="kpi-card blue">
-        <div class="kpi-header"><div class="kpi-icon blue">🤖</div><span class="kpi-label">Conversas do bot</span></div>
+        <div class="kpi-header"><div class="kpi-icon blue">🤖</div><span class="kpi-label">Conversas do bot</span><span class="kpi-info" tabindex="0" data-tip="Toda conversa que passou por um bot do painel (SUPORTE CPLUG, DD e roteadores WhatsApp; sem MERSA/testes). Base: <code>with_bot</code> = verdadeiro.">i</span></div>
         <div class="kpi-value blue" id="kpiBotVolume">—</div>
         <div class="kpi-row"><span class="kpi-delta" id="kpiBotVolumeDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiBotVolumeAnt">—</b></span></div>
         <div class="kpi-foot" id="kpiBotVolumeFoot"></div>
       </div>
       <div class="kpi-card green">
-        <div class="kpi-header"><div class="kpi-icon green">🛡️</div><span class="kpi-label">Contenção</span></div>
+        <div class="kpi-header"><div class="kpi-icon green">🛡️</div><span class="kpi-label">Contenção</span><span class="kpi-info" tabindex="0" data-tip="O bot segurou a conversa — ela nunca foi transferida para um humano. Campo: <code>bot_transferred_to_human_at</code> vazio. (Contidas ÷ total). Contenção inclui as resolvidas + as que o cliente abandonou no bot.">i</span></div>
         <div class="kpi-value green" id="kpiBotContencao">—</div>
         <div class="kpi-row"><span class="kpi-delta" id="kpiBotContencaoDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiBotContencaoAnt">—</b></span></div>
         <div class="kpi-foot" id="kpiBotContencaoFoot"></div>
       </div>
       <div class="kpi-card teal">
-        <div class="kpi-header"><div class="kpi-icon teal">✅</div><span class="kpi-label">Resolvido pelo bot</span></div>
+        <div class="kpi-header"><div class="kpi-icon teal">✅</div><span class="kpi-label">Resolvido pelo bot</span><span class="kpi-info" tabindex="0" data-tip="O bot concluiu a conversa (o próprio Octadesk marca). É um subconjunto da Contenção. Campo: <code>bot_resolved_by_bot</code> = verdadeiro. (Resolvidas ÷ total)">i</span></div>
         <div class="kpi-value teal" id="kpiBotResolucao">—</div>
         <div class="kpi-row"><span class="kpi-delta" id="kpiBotResolucaoDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiBotResolucaoAnt">—</b></span></div>
         <div class="kpi-foot" id="kpiBotResolucaoFoot"></div>
       </div>
       <div class="kpi-card amber">
-        <div class="kpi-header"><div class="kpi-icon amber">➡️</div><span class="kpi-label">Transferido p/ humano</span></div>
+        <div class="kpi-header"><div class="kpi-icon amber">➡️</div><span class="kpi-label">Transferido p/ humano</span><span class="kpi-info" tabindex="0" data-tip="A conversa caiu na fila / foi para um atendente humano. Campo: <code>bot_transferred_to_human_at</code> preenchido. Contenção + Transferência = 100%.">i</span></div>
         <div class="kpi-value amber" id="kpiBotTransfer">—</div>
         <div class="kpi-row"><span class="kpi-delta" id="kpiBotTransferDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiBotTransferAnt">—</b></span></div>
         <div class="kpi-foot" id="kpiBotTransferFoot"></div>
       </div>
       <div class="kpi-card cyan">
-        <div class="kpi-header"><div class="kpi-icon cyan">⏱️</div><span class="kpi-label">Tempo médio no bot</span></div>
+        <div class="kpi-header"><div class="kpi-icon cyan">⏱️</div><span class="kpi-label">Tempo médio no bot</span><span class="kpi-info" tabindex="0" data-tip="Tempo que a conversa ficou com o bot, das contidas já fechadas. Cálculo: <code>bot_closed_at - bot_contact_started_at</code> (ignora acima de 24h). É média, não mediana.">i</span></div>
         <div class="kpi-value cyan" id="kpiBotTempo">—</div>
         <div class="kpi-row"><span class="kpi-delta"></span><span class="kpi-anterior"></span></div>
         <div class="kpi-foot" id="kpiBotTempoFoot"></div>
       </div>
       <div class="kpi-card indigo">
-        <div class="kpi-header"><div class="kpi-icon indigo">🧠</div><span class="kpi-label">WOZ (agente IA)</span></div>
+        <div class="kpi-header"><div class="kpi-icon indigo">🧠</div><span class="kpi-label">WOZ (agente IA)</span><span class="kpi-info" tabindex="0" data-tip="Conversas que usaram o agente virtual/IA &quot;WOZ&quot;. Campo: <code>bot_woz_assigned_at</code> preenchido. O rodapé mostra quantas o WOZ resolveu.">i</span></div>
         <div class="kpi-value indigo" id="kpiBotWoz">—</div>
         <div class="kpi-row"><span class="kpi-delta"></span><span class="kpi-anterior"></span></div>
         <div class="kpi-foot" id="kpiBotWozFoot"></div>
@@ -528,10 +528,10 @@
 
 </main>
 
-<script src="js/config.js?v=55"></script>
-<script src="js/kpis.js?v=55"></script>
-<script src="js/api.js?v=55"></script>
-<script src="js/app.js?v=55"></script>
+<script src="js/config.js?v=56"></script>
+<script src="js/kpis.js?v=56"></script>
+<script src="js/api.js?v=56"></script>
+<script src="js/app.js?v=56"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */

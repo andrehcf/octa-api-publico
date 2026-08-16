@@ -432,6 +432,28 @@ body {
 .kpi-icon.amber  { background: rgba(251,191,36,.15); }
 
 .kpi-label { font-size: 10.5px; color: var(--muted); font-weight: 500; }
+
+/* Ícone "i" de ajuda nos KPIs (tooltip via JS — ver initKpiTips). O card tem
+   overflow:hidden, então a caixa do tooltip é anexada ao body (não é cortada). */
+.kpi-info {
+  margin-left: auto; flex-shrink: 0;
+  width: 15px; height: 15px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; font-style: normal;
+  color: var(--muted); border: 1px solid var(--border);
+  cursor: help; user-select: none;
+}
+.kpi-info:hover, .kpi-info:focus { color: var(--text); border-color: var(--muted); outline: none; }
+.kpi-tip {
+  position: fixed; z-index: 500; max-width: 260px;
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 9px 11px; font-size: 11.5px; line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  pointer-events: none; opacity: 0; transition: opacity .12s;
+}
+.kpi-tip.show { opacity: 1; }
+.kpi-tip code { background: var(--surface); padding: 1px 4px; border-radius: 4px; font-size: 11px; }
 .kpi-value { font-size: 20px; font-weight: 800; letter-spacing: -.5px; margin: 2px 0 5px; }
 .kpi-value.blue   { color: var(--kpi-blue); }
 .kpi-value.cyan   { color: var(--kpi-cyan); }
