@@ -57,6 +57,7 @@
     <div class="nav-item" data-section="categorias"><span class="icon">🏷️</span> Por Categoria</div>
     <div class="nav-item" data-section="ranking"><span class="icon">🏆</span> Ranking</div>
     <div class="nav-item" data-section="reincidencia"><span class="icon">🔁</span> Reincidência</div>
+    <div class="nav-item analista-hide" data-section="qa"><span class="icon">🔎</span> Auditoria</div>
   </nav>
   <div class="sidebar-footer" id="sidebarFooter">
     <div class="sync-status" id="syncStatus">Carregando…</div>
@@ -314,6 +315,50 @@
     </div>
   </section>
 
+  <!-- ═══ SEÇÃO: AUDITORIA QA (só-gestão) ═══ -->
+  <section class="section" id="sec-qa">
+    <div class="kpi-grid cols-4">
+      <div class="kpi-card indigo">
+        <div class="kpi-header"><div class="kpi-icon indigo">🔎</div><span class="kpi-label">Auditorias no período</span><span class="kpi-info" tabindex="0" data-tip="Atendimentos avaliados pela IA no octa-api (rubrica do Fluxo de Atendimento CPlug). A amostragem e a análise rodam no octa-api; aqui é só a leitura dos resultados. Filtro por data da auditoria.">i</span></div>
+        <div class="kpi-value indigo" id="kpiQaTotal">—</div>
+        <div class="kpi-foot" id="kpiQaTotalFoot"></div>
+      </div>
+      <div class="kpi-card teal">
+        <div class="kpi-header"><div class="kpi-icon teal">⭐</div><span class="kpi-label">Score médio</span><span class="kpi-info" tabindex="0" data-tip="Média das notas finais (0–10) que a IA deu aos atendimentos auditados no período.">i</span></div>
+        <div class="kpi-value teal" id="kpiQaScore">—</div>
+        <div class="kpi-foot" id="kpiQaScoreFoot"></div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-header"><div class="kpi-icon blue">👥</div><span class="kpi-label">Analistas auditados</span></div>
+        <div class="kpi-value blue" id="kpiQaAnalistas">—</div>
+        <div class="kpi-foot" id="kpiQaAnalistasFoot"></div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-header"><div class="kpi-icon red">⚠️</div><span class="kpi-label">Com CSAT ruim</span><span class="kpi-info" tabindex="0" data-tip="Auditorias de atendimentos cuja pesquisa de satisfação (CSAT) veio ≤ 2. São o foco principal da auditoria de qualidade.">i</span></div>
+        <div class="kpi-value red" id="kpiQaNeg">—</div>
+        <div class="kpi-foot" id="kpiQaNegFoot"></div>
+      </div>
+    </div>
+
+    <div class="chart-grid full">
+      <div class="card">
+        <div class="card-header"><div>
+          <div class="card-title">Auditoria por analista</div>
+          <div class="card-subtitle">Clique num analista para abrir o relatório 1:1 (auditoria por auditoria)</div>
+        </div></div>
+        <div class="table-wrap">
+          <table class="data linkada" id="tabelaQaAnalistas">
+            <thead><tr>
+              <th>Analista</th><th class="num">Auditorias</th><th class="num">Score médio</th>
+              <th class="num">CSAT ruim</th><th>Critério mais fraco</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ═══ SEÇÃO: TICKETS ═══ -->
   <section class="section" id="sec-tickets">
     <!-- Filtros específicos de tickets -->
@@ -453,21 +498,61 @@
 
   <!-- ═══ SEÇÃO: RANKING ═══ -->
   <section class="section" id="sec-ranking">
-    <div class="chart-grid full">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Ranking de Analistas</div>
-            <div class="card-subtitle" id="subRanking">Score ponderado: volume, engajamento, CSAT, resolvidos + bônus TMA</div>
+
+    <!-- Gestão: analistas separados pela fila de maior volume (2 categorias) -->
+    <div class="ranking-gestao analista-hide" id="rankingGestao">
+      <div class="card-header ranking-topo">
+        <div>
+          <div class="card-title">Ranking de Analistas</div>
+          <div class="card-subtitle">Score ponderado — geral do Suporte ou separado pela fila de maior volume</div>
+        </div>
+        <div class="ranking-controls">
+          <div class="tab-group" id="rankingViewTabs">
+            <button class="tab active" data-view="fila">Por fila</button>
+            <button class="tab" data-view="geral">Geral</button>
           </div>
-          <div class="ranking-controls">
-            <button class="btn-export" id="btnExportRanking" title="Exportar para Excel (CSV)">⬇ Excel</button>
+          <button class="btn-export" id="btnExportRanking" title="Exportar para Excel (CSV)">⬇ Excel</button>
+        </div>
+      </div>
+
+      <!-- Geral: todo o Suporte (todas as filas juntas) -->
+      <div id="rankingGeral" hidden>
+        <div class="chart-grid full">
+          <div class="card">
+            <div class="card-header"><div>
+              <div class="card-title">Geral — todo o Suporte</div>
+              <div class="card-subtitle" id="subRankingGeral">—</div>
+            </div></div>
+            <div class="table-wrap">
+              <table class="data ranking-tabela" id="tabelaRankingGeral">
+                <thead><tr>
+                  <th>#</th>
+                  <th data-col="nome">Analista</th>
+                  <th class="num" data-col="volume">Volume</th>
+                  <th class="num" data-col="participacao">Participação</th>
+                  <th class="num" data-col="engajamento">Engajamento</th>
+                  <th class="num" data-col="csat">CSAT</th>
+                  <th class="num" data-col="resolvidos">Resolvidos</th>
+                  <th class="num" data-col="tma">TMA</th>
+                </tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
           </div>
         </div>
-        <div class="table-wrap">
-          <table class="data" id="tabelaRanking">
-            <thead>
-              <tr>
+      </div>
+
+      <!-- Por fila: 2 categorias -->
+      <div id="rankingPorFila">
+      <div class="chart-grid full">
+        <div class="card">
+          <div class="card-header"><div>
+            <div class="card-title">🎧 Fila estendido + convencional</div>
+            <div class="card-subtitle" id="subRankingA">—</div>
+          </div></div>
+          <div class="table-wrap">
+            <table class="data ranking-tabela" id="tabelaRankingA">
+              <thead><tr>
                 <th>#</th>
                 <th data-col="nome">Analista</th>
                 <th class="num" data-col="volume">Volume</th>
@@ -476,10 +561,59 @@
                 <th class="num" data-col="csat">CSAT</th>
                 <th class="num" data-col="resolvidos">Resolvidos</th>
                 <th class="num" data-col="tma">TMA</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div>
+            <div class="card-title">⭐ Fila especializado <span class="cat-hint">· Canais · DD · Enterprise</span></div>
+            <div class="card-subtitle" id="subRankingB">—</div>
+          </div></div>
+          <div class="table-wrap">
+            <table class="data ranking-tabela" id="tabelaRankingB">
+              <thead><tr>
+                <th>#</th>
+                <th data-col="nome">Analista</th>
+                <th class="num" data-col="volume">Volume</th>
+                <th class="num" data-col="participacao">Participação</th>
+                <th class="num" data-col="engajamento">Engajamento</th>
+                <th class="num" data-col="csat">CSAT</th>
+                <th class="num" data-col="resolvidos">Resolvidos</th>
+                <th class="num" data-col="tma">TMA</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- Analista: só a própria posição (sem separação por fila) -->
+    <div class="ranking-analista">
+      <div class="chart-grid full">
+        <div class="card">
+          <div class="card-header"><div>
+            <div class="card-title">Ranking de Analistas</div>
+            <div class="card-subtitle" id="subRanking">Score ponderado: volume, engajamento, CSAT, resolvidos + bônus TMA</div>
+          </div></div>
+          <div class="table-wrap">
+            <table class="data" id="tabelaRanking">
+              <thead><tr>
+                <th>#</th>
+                <th>Analista</th>
+                <th class="num">Volume</th>
+                <th class="num">Participação</th>
+                <th class="num">Engajamento</th>
+                <th class="num">CSAT</th>
+                <th class="num">Resolvidos</th>
+                <th class="num">TMA</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -528,10 +662,24 @@
 
 </main>
 
-<script src="js/config.js?v=57"></script>
-<script src="js/kpis.js?v=57"></script>
-<script src="js/api.js?v=57"></script>
-<script src="js/app.js?v=57"></script>
+<!-- ═══ MODAL: Relatório 1:1 de Auditoria QA (só-gestão) ═══ -->
+<div class="qa-modal-overlay" id="qaModal" hidden>
+  <div class="qa-modal print-target" role="dialog" aria-modal="true" aria-labelledby="qaModalTitulo">
+    <div class="qa-modal-head no-print">
+      <div class="qa-modal-titulo" id="qaModalTitulo">Relatório 1:1</div>
+      <div class="qa-modal-acoes">
+        <button class="btn-sec" id="qaModalPdf" type="button">🖨️ Baixar PDF</button>
+        <button class="btn-sec" id="qaModalFechar" type="button" aria-label="Fechar">✕</button>
+      </div>
+    </div>
+    <div class="qa-modal-body" id="qaModalBody"></div>
+  </div>
+</div>
+
+<script src="js/config.js?v=59"></script>
+<script src="js/kpis.js?v=59"></script>
+<script src="js/api.js?v=59"></script>
+<script src="js/app.js?v=59"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */

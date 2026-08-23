@@ -116,18 +116,24 @@ const API = (() => {
   // daqui — agora são a tabela-fato + RPCs, agregados server-side sob demanda.)
   async function carregarTudo() {
     const [
-      chatsDia, agentesDia, tmaDistDia, reincMes, botDia, botHora, syncInfo,
+      chatsDia, agentesDia, agentesFilaDia, tmaDistDia, reincMes, botDia, botHora, qaResultados, syncInfo,
     ] = await Promise.all([
       tabela("agg_chats_dia", "dia,fila_slug"),
       tabela("agg_agentes_dia", "dia,agent_id"),
+      // Ranking por categoria de fila (só-gestão via RLS). Fallback []: se a migration
+      // ainda não rodou, o ranking cai no modo não-agrupado (ver app.js).
+      tabela("agg_agentes_fila_dia", "dia,agent_id,categoria_slug").catch(() => []),
       tabela("agg_tma_distribuicao_dia", "dia,fila_slug"),
       tabela("agg_reincidencia_mes", "mes"),
       tabela("agg_bot_dia", "dia,canal"),      // seção Bot (só-gestão via RLS)
       tabela("agg_bot_hora", "dia,hora"),
+      // Auditoria QA (só-gestão via RLS). Fallback []: se a tabela ainda não existe
+      // (migration_qa.sql não aplicada) a dashboard não quebra — a seção fica vazia.
+      tabela("agg_qa_resultados", "result_id").catch(() => []),
       tabela("sync_info", "id"),
     ]);
     return {
-      chatsDia, agentesDia, tmaDistDia, reincMes, botDia, botHora,
+      chatsDia, agentesDia, agentesFilaDia, tmaDistDia, reincMes, botDia, botHora, qaResultados,
       syncInfo: syncInfo[0] || null,
     };
   }

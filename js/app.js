@@ -12,6 +12,7 @@
     fila: "todas",
     secao: "performance",
     rankingSort: { col: "score", dir: "desc" },  // ordenação da tabela de ranking (gestão)
+    rankingView: "fila",                         // "fila" (2 categorias) | "geral" (todo o Suporte)
     rankingRows: [],                             // analistas agregados do período (p/ re-ordenar/exportar)
     tkt: { form: "", status: "", analista: "", issue: "todos", porFechamento: false },  // filtros de tickets
     tktExport: { forms: [], ranking: [] },                              // último resultado p/ CSV
@@ -877,7 +878,7 @@
       if (!entre(r.dia, p.inicio, p.fim)) continue;
       let a = porAgente.get(r.agent_id);
       if (!a) {
-        a = { nome: r.agent_name, volume: 0, tma_soma_seg: 0, tma_n: 0,
+        a = { id: r.agent_id, nome: r.agent_name, volume: 0, tma_soma_seg: 0, tma_n: 0,
               csat_respondidos: 0, csat_satisfeitos: 0, csat_soma_score: 0,
               resolvidos_sim: 0, resolvidos_total: 0 };
         porAgente.set(r.agent_id, a);
@@ -895,9 +896,20 @@
     const linhas = [...porAgente.values()];
     const totalVolume = linhas.reduce((s, a) => s + a.volume, 0) || 1;
 
+    // Bucket por categoria de fila: soma o volume por (agent, categoria) no período;
+    // o analista entra na categoria de MAIOR volume (foco = % do volume nessa categoria).
+    const filaPorAgente = new Map();
+    for (const fr of (estado.dados.agentesFilaDia || [])) {
+      if (!entre(fr.dia, p.inicio, p.fim)) continue;
+      let f = filaPorAgente.get(fr.agent_id);
+      if (!f) { f = { est_conv: 0, especializado: 0 }; filaPorAgente.set(fr.agent_id, f); }
+      f[fr.categoria_slug] = (f[fr.categoria_slug] || 0) + (fr.volume || 0);
+    }
+
     estado.rankingRows = linhas.map((r) => {
       const tmaMin = r.tma_n ? r.tma_soma_seg / r.tma_n / 60 : null;
       const a = {
+        id: r.id,
         nome: r.nome,
         volume: r.volume,
         participacaoPct: 100 * r.volume / totalVolume,
@@ -907,6 +919,11 @@
         tmaMin,
       };
       a.score = KPIS.scoreRanking(a, CONFIG.PESOS, CONFIG.TMA_LIMITE_MIN);
+      const f = filaPorAgente.get(r.id) || { est_conv: 0, especializado: 0 };
+      const totalCat = f.est_conv + f.especializado;
+      a.categoria = totalCat === 0 ? "outros"
+        : (f.est_conv >= f.especializado ? "est_conv" : "especializado");
+      a.focoPct = totalCat ? 100 * Math.max(f.est_conv, f.especializado) / totalCat : null;
       return a;
     });
     $("btnExportRanking").style.display = "";   // gestão pode exportar a lista
@@ -939,28 +956,48 @@
     });
   }
 
-  // (Re)desenha o corpo do ranking na ordem atual + as setas nos cabeçalhos.
+  // Badge "% foco na fila" (quanto do volume do analista está na categoria dominante).
+  function focoBadge(pct) {
+    if (pct == null) return "";
+    const cls = pct >= 90 ? "foco-alto" : pct >= 70 ? "foco-medio" : "foco-baixo";
+    return ` <span class="foco-badge ${cls}" title="Foco na fila: ${KPIS.fmtPct(pct)} do volume do analista nesta categoria">${KPIS.fmtPct(pct, 0)}</span>`;
+  }
+
+  // (Re)desenha o ranking da gestão: "Geral" (todo o Suporte) + dois grupos por categoria de fila.
   function pintarRanking() {
     const rows = ordenarRanking(estado.rankingRows);
     estado.rankingSorted = rows;   // ordem exibida → a exportação bate com a tela
+    // Geral = todo o Suporte (todas as filas), sem badge de foco.
+    pintarGrupoRanking("tabelaRankingGeral", "subRankingGeral", rows, false);
+    // Por fila: "outros" (analista sem volume nas 2 categorias — raríssimo) fica junto de Est+Conv.
+    pintarGrupoRanking("tabelaRankingA", "subRankingA", rows.filter((a) => a.categoria !== "especializado"), true);
+    pintarGrupoRanking("tabelaRankingB", "subRankingB", rows.filter((a) => a.categoria === "especializado"), true);
+
+    document.querySelectorAll("#sec-ranking .ranking-tabela thead th[data-col]").forEach((th) => {
+      const ativa = th.dataset.col === estado.rankingSort.col;
+      th.classList.toggle("sort-asc", ativa && estado.rankingSort.dir === "asc");
+      th.classList.toggle("sort-desc", ativa && estado.rankingSort.dir === "desc");
+    });
+  }
+
+  function pintarGrupoRanking(tabelaId, subId, rows, comFoco) {
     const ehRankScore = estado.rankingSort.col === "score" && estado.rankingSort.dir === "desc";
-    $("tabelaRanking").querySelector("tbody").innerHTML = rows.map((a, i) => `
+    $(tabelaId).querySelector("tbody").innerHTML = rows.map((a, i) => `
       <tr>
         <td><span class="pos-badge ${ehRankScore && i < 3 ? "top" + (i + 1) : ""}">${i + 1}</span></td>
-        <td>${esc(a.nome)}</td>
+        <td>${esc(a.nome)}${comFoco ? focoBadge(a.focoPct) : ""}</td>
         <td class="num">${KPIS.fmtInt(a.volume)}</td>
         <td class="num">${KPIS.fmtPct(a.participacaoPct)}</td>
         <td class="num">${KPIS.fmtPct(a.engajamentoPct)}</td>
         <td class="num">${KPIS.fmtPct(a.csatPct)}</td>
         <td class="num">${KPIS.fmtPct(a.resolvidosPct)}</td>
         <td class="num">${a.tmaMin !== null ? KPIS.fmtDuracao(a.tmaMin * 60) : "—"}</td>
-      </tr>`).join("") || `<tr><td colspan="8" class="empty-note">Sem dados no período</td></tr>`;
-
-    $("tabelaRanking").querySelectorAll("thead th[data-col]").forEach((th) => {
-      const ativa = th.dataset.col === estado.rankingSort.col;
-      th.classList.toggle("sort-asc", ativa && estado.rankingSort.dir === "asc");
-      th.classList.toggle("sort-desc", ativa && estado.rankingSort.dir === "desc");
-    });
+      </tr>`).join("") || `<tr><td colspan="8" class="empty-note">Sem analistas nesta fila no período</td></tr>`;
+    const sub = $(subId);
+    if (sub) {
+      const vol = rows.reduce((s, a) => s + (a.volume || 0), 0);
+      sub.textContent = `${rows.length} analista${rows.length === 1 ? "" : "s"} · ${KPIS.fmtInt(vol)} atend.`;
+    }
   }
 
   // ══════════════ REINCIDÊNCIA ══════════════
@@ -1144,6 +1181,131 @@
     });
   }
 
+  // ── Auditoria QA (só-gestão) ── leitura dos resultados já auditados no octa-api.
+  // Agrupa por analista, calcula score médio e critério mais fraco; o drill-down (clique
+  // na linha) abre o relatório 1:1. Nada de LLM aqui — a análise roda no octa-api.
+  function renderQa() {
+    const p = periodo();
+    if (!p) return;
+    const int = (x) => KPIS.fmtInt(x || 0);
+    const setar = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+    const rows = (estado.dados.qaResultados || []).filter((r) => entre(r.dia, p.inicio, p.fim));
+
+    // KPIs de topo
+    const comScore = rows.filter((r) => r.score != null);
+    const scoreMedio = comScore.length
+      ? comScore.reduce((s, r) => s + Number(r.score), 0) / comScore.length : null;
+    const comCsat = rows.filter((r) => r.csat_score != null);
+    const neg = rows.filter((r) => r.csat_score != null && r.csat_score <= 2).length;
+    const analistas = new Set(rows.map((r) => r.analista_id)).size;
+    setar("kpiQaTotal", int(rows.length));
+    setar("kpiQaTotalFoot", rows.length ? `${int(comCsat.length)} com CSAT respondido` : "sem auditorias no período");
+    setar("kpiQaScore", scoreMedio == null ? "—" : scoreMedio.toFixed(1));
+    setar("kpiQaScoreFoot", "nota da IA (0–10)");
+    setar("kpiQaAnalistas", int(analistas));
+    setar("kpiQaAnalistasFoot", analistas ? "com auditoria no período" : "");
+    setar("kpiQaNeg", int(neg));
+    setar("kpiQaNegFoot", rows.length ? `${KPIS.fmtPct(100 * neg / rows.length)} das auditorias` : "");
+
+    // Agrega por analista (score médio, negativos, média por critério)
+    const porAnalista = new Map();
+    for (const r of rows) {
+      let a = porAnalista.get(r.analista_id);
+      if (!a) { a = { id: r.analista_id, nome: r.analista_nome, itens: [], somaScore: 0, nScore: 0, neg: 0, crit: new Map() }; porAnalista.set(r.analista_id, a); }
+      a.nome = r.analista_nome || a.nome;
+      a.itens.push(r);
+      if (r.score != null) { a.somaScore += Number(r.score); a.nScore++; }
+      if (r.csat_score != null && r.csat_score <= 2) a.neg++;
+      for (const c of (r.criterios || [])) {
+        if (c && c.nome != null && c.nota != null) {
+          let g = a.crit.get(c.nome); if (!g) { g = { soma: 0, n: 0 }; a.crit.set(c.nome, g); }
+          g.soma += Number(c.nota); g.n++;
+        }
+      }
+    }
+    estado.qaPorAnalista = porAnalista;   // fonte do drill-down (modal)
+
+    const lista = [...porAnalista.values()].sort((x, y) => y.itens.length - x.itens.length);
+    const tb = $("tabelaQaAnalistas");
+    if (tb) tb.querySelector("tbody").innerHTML = lista.map((a) => {
+      const media = a.nScore ? a.somaScore / a.nScore : null;
+      const pior = qaCriterioMaisFraco(a);
+      return `<tr data-analista="${esc(String(a.id))}" tabindex="0">
+        <td>${esc(a.nome)}</td>
+        <td class="num">${int(a.itens.length)}</td>
+        <td class="num">${media == null ? "—" : media.toFixed(1)}</td>
+        <td class="num">${int(a.neg)}</td>
+        <td>${pior ? esc(pior.nome) + " (" + pior.media.toFixed(1) + ")" : "—"}</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="5" class="empty-note">Sem auditorias no período</td></tr>`;
+  }
+
+  // Critérios ordenados por média de nota (asc) — o 1º é o mais fraco.
+  function qaCriteriosOrdenados(a) {
+    return [...a.crit.entries()]
+      .map(([nome, g]) => ({ nome, media: g.soma / g.n }))
+      .sort((x, y) => x.media - y.media);
+  }
+  function qaCriterioMaisFraco(a) {
+    const cs = qaCriteriosOrdenados(a);
+    return cs.length ? cs[0] : null;
+  }
+
+  // HTML do relatório 1:1 (cabeçalho + considerações determinísticas + 1 cartão por auditoria).
+  // A síntese por IA ("líder preparando 1:1") NÃO é reproduzida — fica no octa-api.
+  function qaRelatorioHtml(a, p) {
+    const media = a.nScore ? a.somaScore / a.nScore : null;
+    const crits = qaCriteriosOrdenados(a);
+    const csatPill = (s) => s == null
+      ? '<span class="qa-pill nr">CSAT n/r</span>'
+      : `<span class="qa-pill ${s <= 2 ? "ruim" : s >= 4 ? "bom" : "neutro"}">CSAT ${s}/5</span>`;
+    const lista = (arr) => (arr && arr.length)
+      ? `<ul class="qa-lista">${arr.map((x) => `<li>${esc(String(x))}</li>`).join("")}</ul>` : "";
+    const cabec = `
+      <div class="qa-rel-cabec">
+        <h2>${esc(a.nome)}</h2>
+        <div class="qa-rel-meta">Período ${esc(KPIS.fmtDiaCurto(p.inicio))}–${esc(KPIS.fmtDiaCurto(p.fim))}
+          · ${a.itens.length} auditoria(s) · Score médio ${media == null ? "—" : media.toFixed(1)}</div>
+      </div>`;
+    const consid = crits.length ? `
+      <div class="qa-rel-consid">
+        <h3>Critérios mais fracos (média das notas)</h3>
+        <ol>${crits.slice(0, 5).map((c) => `<li>${esc(c.nome)} <b>${c.media.toFixed(1)}</b></li>`).join("")}</ol>
+      </div>` : "";
+    const cartoes = a.itens.map((r) => {
+      const crit = (r.criterios || []).map((c) =>
+        `<li><b>${esc(String(c.nome ?? ""))}</b> — ${c.nota == null ? "—" : esc(String(c.nota))}${c.comentario ? ": " + esc(String(c.comentario)) : ""}</li>`).join("");
+      const bloco = (titulo, html) => html ? `<div class="qa-sub">${titulo}</div>${html}` : "";
+      return `
+        <div class="qa-cartao">
+          <div class="qa-cartao-topo">
+            <span class="qa-chat">Atendimento #${esc(String(r.chat_number ?? "—"))}</span>
+            ${csatPill(r.csat_score)}
+            <span class="qa-score">Score ${r.score == null ? "—" : Number(r.score).toFixed(1)}</span>
+          </div>
+          ${r.assunto ? `<div class="qa-assunto">${esc(r.assunto)}</div>` : ""}
+          ${bloco("Critérios", crit ? `<ul class="qa-criterios">${crit}</ul>` : "")}
+          ${bloco("Pontos positivos", lista(r.pontos_positivos))}
+          ${bloco("Pontos negativos", lista(r.pontos_negativos))}
+          ${bloco("Insight", r.insight ? `<p class="qa-insight">${esc(r.insight)}</p>` : "")}
+        </div>`;
+    }).join("");
+    return cabec + consid + `<div class="qa-cartoes">${cartoes}</div>`;
+  }
+
+  function abrirQaAnalista(id) {
+    const a = estado.qaPorAnalista && estado.qaPorAnalista.get(id);
+    if (!a) return;
+    $("qaModalTitulo").textContent = `Relatório 1:1 — ${a.nome}`;
+    $("qaModalBody").innerHTML = qaRelatorioHtml(a, periodo());
+    $("qaModal").hidden = false;
+    document.body.classList.add("qa-modal-aberto");
+  }
+  function fecharQaModal() {
+    $("qaModal").hidden = true;
+    document.body.classList.remove("qa-modal-aberto");
+  }
+
   const RENDERS = {
     performance: () => { renderPerformance(); renderDiaHora(); renderDistTma(); renderCategoriasPerf(); },
     bot: renderBot,
@@ -1151,6 +1313,7 @@
     categorias: renderCategorias,
     ranking: renderRanking,
     reincidencia: renderReincidencia,
+    qa: renderQa,
   };
 
   const TITULOS = {
@@ -1160,6 +1323,7 @@
     categorias: ["Por Categoria", "Volume, TMA e CSAT por categoria de atendimento"],
     ranking: ["Ranking de Analistas", "Score ponderado — filtre por data"],
     reincidencia: ["Reincidência", "Clientes que retornaram em até 7 dias"],
+    qa: ["Auditoria de Qualidade", "Avaliação por IA dos atendimentos — visível só para a gestão"],
   };
 
   function render() {
@@ -1396,6 +1560,23 @@
     if (window.innerWidth <= 768) fecharSidebar();
   });
 
+  // ── Modal do relatório 1:1 de Auditoria QA ──
+  $("tabelaQaAnalistas").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-analista]");
+    if (tr) abrirQaAnalista(tr.dataset.analista);
+  });
+  $("tabelaQaAnalistas").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const tr = e.target.closest("tr[data-analista]");
+    if (tr) { e.preventDefault(); abrirQaAnalista(tr.dataset.analista); }
+  });
+  $("qaModalFechar").addEventListener("click", fecharQaModal);
+  $("qaModalPdf").addEventListener("click", () => window.print());
+  $("qaModal").addEventListener("click", (e) => { if (e.target === $("qaModal")) fecharQaModal(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("qaModal").hidden) fecharQaModal();
+  });
+
   $("periodoTabs").addEventListener("click", (e) => {
     const tab = e.target.closest(".tab");
     if (!tab) return;
@@ -1479,8 +1660,8 @@
       ]));
   });
 
-  // ── Ranking (gestão): ordenar por clique no cabeçalho + exportar p/ Excel ──
-  $("tabelaRanking").querySelector("thead").addEventListener("click", (e) => {
+  // ── Ranking (gestão): ordenar por clique no cabeçalho (vale pras 2 categorias) + Excel ──
+  $("rankingGestao").addEventListener("click", (e) => {
     const th = e.target.closest("th[data-col]");
     if (!th || ehAnalista()) return;
     const col = th.dataset.col;
@@ -1496,14 +1677,38 @@
     const per = p ? `${p.inicio}_a_${p.fim}` : "periodo";
     const num1 = (v) => (v == null ? "" : v.toFixed(1).replace(".", ","));   // minutos (TMA)
     const num2 = (v) => (v == null ? "" : v.toFixed(2).replace(".", ","));   // percentuais (2 casas)
-    baixarCSV(`ranking_analistas_${per}.csv`,
-      ["#", "Analista", "Volume", "Participação (%)", "Engajamento (%)",
-       "CSAT (%)", "Resolvidos (%)", "TMA (min)"],
-      (estado.rankingSorted || []).map((a, i) => [
-        i + 1, a.nome, a.volume,
+    const sorted = estado.rankingSorted || [];
+    const catLabel = { est_conv: "Est+Conv", especializado: "Especializado", outros: "—" };
+    const linhas = [];
+    if (estado.rankingView === "geral") {
+      // Geral: lista corrida de todo o Suporte (a categoria vai só como referência).
+      sorted.forEach((a, i) => linhas.push([
+        catLabel[a.categoria] || "—", i + 1, a.nome, num2(a.focoPct), a.volume,
         num2(a.participacaoPct), num2(a.engajamentoPct),
         num2(a.csatPct), num2(a.resolvidosPct), num1(a.tmaMin),
       ]));
+    } else {
+      [["Fila estendido + convencional", sorted.filter((a) => a.categoria !== "especializado")],
+       ["Fila Especializado", sorted.filter((a) => a.categoria === "especializado")],
+      ].forEach(([cat, grupo]) => grupo.forEach((a, i) => linhas.push([
+        cat, i + 1, a.nome, num2(a.focoPct), a.volume,
+        num2(a.participacaoPct), num2(a.engajamentoPct),
+        num2(a.csatPct), num2(a.resolvidosPct), num1(a.tmaMin),
+      ])));
+    }
+    baixarCSV(`ranking_analistas_${per}.csv`,
+      ["Categoria", "#", "Analista", "Foco na fila (%)", "Volume", "Participação (%)",
+       "Engajamento (%)", "CSAT (%)", "Resolvidos (%)", "TMA (min)"],
+      linhas);
+  });
+  // Alterna a visão do ranking (gestão): "Por fila" (2 categorias) ↔ "Geral" (todo o Suporte).
+  $("rankingViewTabs").addEventListener("click", (e) => {
+    const btn = e.target.closest(".tab");
+    if (!btn) return;
+    estado.rankingView = btn.dataset.view;
+    document.querySelectorAll("#rankingViewTabs .tab").forEach((t) => t.classList.toggle("active", t === btn));
+    $("rankingPorFila").hidden = estado.rankingView !== "fila";
+    $("rankingGeral").hidden = estado.rankingView !== "geral";
   });
 
   // ── Sidebar mobile ──

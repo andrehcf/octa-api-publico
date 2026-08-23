@@ -735,3 +735,121 @@ body.modo-analista .chart-grid.two-one { grid-template-columns: 1fr; }
 /* Elementos que precisam permanecer com texto branco sobre cor de marca */
 :root[data-theme="light"] .tab.active,
 :root[data-theme="light"] .login-btn { color: #fff; }
+
+/* ══════════════════════════════════════════════════════════════
+   Auditoria QA (só-gestão): tabela clicável + modal do relatório 1:1
+   ══════════════════════════════════════════════════════════════ */
+table.data.linkada tbody tr { cursor: pointer; }
+table.data.linkada tbody tr:hover { background: var(--surface2); }
+
+.btn-sec {
+  padding: 7px 12px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text); font-size: 12.5px; font-weight: 600;
+  cursor: pointer; transition: border-color .15s, color .15s;
+}
+.btn-sec:hover { border-color: var(--accent); color: var(--accent); }
+
+.qa-modal-overlay {
+  position: fixed; inset: 0; z-index: 200; display: none;
+  align-items: flex-start; justify-content: center;
+  padding: 40px 16px; background: rgba(4,8,18,0.62);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+.qa-modal-overlay:not([hidden]) { display: flex; }
+.qa-modal {
+  width: 100%; max-width: 820px; max-height: 88vh; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+}
+.qa-modal-head {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: center;
+  justify-content: space-between; gap: 12px; padding: 16px 20px;
+  border-bottom: 1px solid var(--border); background: var(--surface);
+}
+.qa-modal-titulo { font-size: 15px; font-weight: 700; color: var(--text); }
+.qa-modal-acoes { display: flex; gap: 8px; }
+.qa-modal-body { padding: 20px; }
+
+.qa-rel-cabec h2 { font-size: 18px; margin: 0 0 4px; color: var(--text); }
+.qa-rel-meta { font-size: 12.5px; color: var(--muted); }
+.qa-rel-consid {
+  margin: 16px 0; padding: 12px 14px; border-radius: 10px;
+  background: var(--surface2); border: 1px solid var(--border);
+}
+.qa-rel-consid h3 { font-size: 12.5px; margin: 0 0 8px; color: var(--text); }
+.qa-rel-consid ol { margin: 0; padding-left: 20px; color: var(--muted); font-size: 12.5px; }
+.qa-rel-consid ol b { color: var(--text); }
+
+.qa-cartoes { display: flex; flex-direction: column; gap: 14px; margin-top: 16px; }
+.qa-cartao {
+  border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+  background: var(--surface);
+}
+.qa-cartao-topo { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.qa-chat { font-weight: 700; color: var(--text); font-size: 13.5px; }
+.qa-score { margin-left: auto; font-weight: 700; color: var(--accent); font-size: 13px; }
+.qa-assunto { margin: 6px 0 2px; color: var(--text); font-size: 13px; }
+.qa-sub {
+  margin: 12px 0 4px; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted); font-weight: 700;
+}
+.qa-criterios, .qa-lista { margin: 0; padding-left: 18px; color: var(--text); font-size: 12.5px; }
+.qa-criterios li, .qa-lista li { margin: 2px 0; }
+.qa-criterios li b { color: var(--text); }
+.qa-insight { margin: 0; color: var(--text); font-size: 12.5px; font-style: italic; }
+
+.qa-pill {
+  display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 700;
+  background: var(--surface2); color: var(--muted);
+}
+.qa-pill.ruim   { background: color-mix(in srgb, var(--kpi-red) 16%, transparent);   color: var(--kpi-red); }
+.qa-pill.bom    { background: color-mix(in srgb, var(--kpi-green) 16%, transparent); color: var(--kpi-green); }
+.qa-pill.neutro { background: color-mix(in srgb, var(--kpi-amber) 16%, transparent); color: var(--kpi-amber); }
+
+/* ── Impressão → "Salvar como PDF": só o relatório 1:1 (modal aberto) ── */
+@media print {
+  body.qa-modal-aberto > *:not(.qa-modal-overlay) { display: none !important; }
+  body.qa-modal-aberto .no-print { display: none !important; }
+  body.qa-modal-aberto .qa-modal-overlay {
+    position: static; display: block; padding: 0; background: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  body.qa-modal-aberto .qa-modal {
+    max-width: 100%; max-height: none; overflow: visible;
+    border: none; box-shadow: none; background: #fff;
+  }
+  body.qa-modal-aberto .qa-modal-body,
+  body.qa-modal-aberto .qa-cartao,
+  body.qa-modal-aberto .qa-rel-consid { background: #fff !important; }
+  body.qa-modal-aberto .qa-modal-body,
+  body.qa-modal-aberto .qa-cartao { color: #161616 !important; border-color: #d9d9d9 !important; }
+  body.qa-modal-aberto .qa-rel-cabec h2,
+  body.qa-modal-aberto .qa-chat,
+  body.qa-modal-aberto .qa-assunto,
+  body.qa-modal-aberto .qa-criterios,
+  body.qa-modal-aberto .qa-lista,
+  body.qa-modal-aberto .qa-insight { color: #161616 !important; }
+  body.qa-modal-aberto .qa-rel-meta,
+  body.qa-modal-aberto .qa-sub,
+  body.qa-modal-aberto .qa-rel-consid ol { color: #555 !important; }
+  body.qa-modal-aberto .qa-cartao { break-inside: avoid; }
+  @page { margin: 1.4cm; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Ranking agrupado por categoria de fila (só-gestão)
+   ══════════════════════════════════════════════════════════════ */
+/* Gestão vê os 2 grupos (.ranking-gestao, escondido p/ analista via .analista-hide);
+   o analista vê só a própria posição (.ranking-analista, escondido p/ a gestão). */
+body:not(.modo-analista) .ranking-analista { display: none; }
+.ranking-topo { padding: 0 2px 2px; }
+.cat-hint { font-weight: 400; color: var(--muted); font-size: 12px; }
+
+.foco-badge {
+  display: inline-block; padding: 1px 7px; border-radius: 99px;
+  font-size: 10.5px; font-weight: 700; vertical-align: 1px;
+  background: var(--surface2); color: var(--muted);
+}
+.foco-badge.foco-alto  { background: color-mix(in srgb, var(--kpi-green) 16%, transparent); color: var(--kpi-green); }
+.foco-badge.foco-medio { background: color-mix(in srgb, var(--kpi-amber) 16%, transparent); color: var(--kpi-amber); }
+.foco-badge.foco-baixo { background: var(--surface2); color: var(--muted); }
