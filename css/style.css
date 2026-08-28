@@ -807,6 +807,8 @@ table.data.linkada tbody tr:hover { background: var(--surface2); }
 .tkt-modal-sub { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
 .tkt-modal-empty { font-size: 13px; color: var(--muted); padding: 12px 0; }
 .tkt-modal-atraso { color: #ef4444; font-weight: 600; }
+.tkt-link { color: var(--accent); font-weight: 600; text-decoration: none; }
+.tkt-link:hover { text-decoration: underline; }
 
 .qa-rel-cabec h2 { font-size: 18px; margin: 0 0 4px; color: var(--text); }
 .qa-rel-meta { font-size: 12.5px; color: var(--muted); }

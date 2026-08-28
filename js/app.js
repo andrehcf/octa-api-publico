@@ -1411,7 +1411,9 @@
       + ` · ${f.porFechamento ? "por fechamento" : "por abertura"}`;
     const linhas = rows.map((r) => `
       <tr>
-        <td>#${r.ticket_number != null ? r.ticket_number : "—"}</td>
+        <td>${r.ticket_number != null
+          ? `<a class="tkt-link" href="https://app.octadesk.com/ticket/edit/${r.ticket_number}" target="_blank" rel="noopener noreferrer" title="Abrir no Octadesk">#${r.ticket_number}</a>`
+          : "—"}</td>
         <td>${esc(r.status_name || "—")}</td>
         <td>${esc(r.assigned_name || "—")}</td>
         <td>${dia(r.created_dia)}</td>
