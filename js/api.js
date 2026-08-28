@@ -111,6 +111,9 @@ const API = (() => {
   const ticketsPorFormulario  = (f) => _rpc("tickets_por_formulario", _tktParams(f)).then((d) => d || []);
   const ticketsPorStatus      = (f) => _rpc("tickets_por_status", _tktParams(f)).then((d) => d || []);
   const ticketsRankingAnalistas = (f) => _rpc("tickets_ranking_analistas", _tktParams(f)).then((d) => d || []);
+  // Lista os tickets estourados de UM formulário (para a modal ao clicar na contagem).
+  const ticketsSlaEstourado   = (f, formName) =>
+    _rpc("tickets_sla_estourado", { ..._tktParams(f), p_form_name: formName }).then((d) => d || []);
 
   // Carrega as tabelas pequenas em paralelo; ordem = PK de cada uma. (Tickets saíram
   // daqui — agora são a tabela-fato + RPCs, agregados server-side sob demanda.)
@@ -141,7 +144,7 @@ const API = (() => {
   return {
     carregarTudo, categoriasPeriodo, chatsHoraPeriodo, cliente,
     ticketsOpcoes, ticketsKpis, ticketsTimeseries,
-    ticketsPorFormulario, ticketsPorStatus, ticketsRankingAnalistas,
+    ticketsPorFormulario, ticketsPorStatus, ticketsRankingAnalistas, ticketsSlaEstourado,
     // modo analista
     meuPerfil, carregarTudoAnalista, categoriasPeriodoAnalista,
     chatsHoraPeriodoAnalista, meuRankingPeriodo,

@@ -705,6 +705,7 @@
       issue: t.issue || "todos",
       ini: p.inicio, fim: p.fim, porFechamento: t.porFechamento,
     };
+    estado.tktFiltro = f;                          // guarda p/ a modal de SLA estourado
     const pAnt = periodoAnterior(p);
     const fAnt = pAnt ? { ...f, ini: pAnt.inicio, fim: pAnt.fim } : null;
 
@@ -768,7 +769,13 @@
         <td class="num">${horas(r.tma_mediana_h)}</td>
         <td class="num">${r.alvo_horas != null ? horas(r.alvo_horas) : "—"}</td>
         <td class="num">${r.pct_dentro_sla != null ? KPIS.fmtPct(r.pct_dentro_sla) : "—"}</td>
-      </tr>`).join("") || `<tr><td colspan="7" class="empty-note">Sem dados no período</td></tr>`;
+        <td class="num">${
+          r.alvo_horas == null ? "—"
+          : r.sla_estourado > 0
+            ? `<button class="sla-badge" data-form="${esc(r.form_name)}" title="Ver tickets estourados">${int(r.sla_estourado)}</button>`
+            : `<span class="sla-zero">0</span>`
+        }</td>
+      </tr>`).join("") || `<tr><td colspan="8" class="empty-note">Sem dados no período</td></tr>`;
 
     // Ranking de analistas
     $("tabelaTktRanking").querySelector("tbody").innerHTML = ranking.map((r) => `
@@ -1372,6 +1379,59 @@
     document.body.classList.remove("qa-modal-aberto");
   }
 
+  // ── Modal: tickets com SLA estourado de UM formulário (clique no badge da tabela) ──
+  async function abrirTktModal(formName) {
+    const f = estado.tktFiltro;
+    if (!f) return;
+    $("tktModalTitulo").textContent = `SLA estourado — ${formName}`;
+    $("tktModalBody").innerHTML = `<div class="tkt-modal-empty">Carregando…</div>`;
+    $("tktModal").hidden = false;
+    let rows;
+    try {
+      rows = await API.ticketsSlaEstourado(f, formName);
+    } catch (e) {
+      console.error(e);
+      $("tktModalBody").innerHTML = `<div class="tkt-modal-empty">Erro ao carregar os tickets.</div>`;
+      return;
+    }
+    const horasH = (h) => (h == null ? "—" : KPIS.fmtHoras(h));
+    const dia = (d) => (d ? KPIS.fmtDiaCurto(d) : "—");
+    const hoje = new Date();
+    // Atraso (arredondado em dias): fechado usa TMA; aberto usa idade até hoje. Ambos − alvo.
+    const atraso = (r) => {
+      if (r.alvo_horas == null) return "—";
+      let excedenteH;
+      if (r.fechado && r.tma_seg != null) excedenteH = r.tma_seg / 3600 - r.alvo_horas;
+      else if (!r.fechado && r.created_dia)
+        excedenteH = Math.floor((hoje - new Date(r.created_dia + "T00:00:00")) / 86400000) * 24 - r.alvo_horas;
+      else return "—";
+      return `<span class="tkt-modal-atraso">+${Math.max(0, Math.round(excedenteH / 24))}d</span>`;
+    };
+    const sub = `${rows.length} ticket(s) estourado(s) · ${dia(f.ini)} a ${dia(f.fim)}`
+      + ` · ${f.porFechamento ? "por fechamento" : "por abertura"}`;
+    const linhas = rows.map((r) => `
+      <tr>
+        <td>#${r.ticket_number != null ? r.ticket_number : "—"}</td>
+        <td>${esc(r.status_name || "—")}</td>
+        <td>${esc(r.assigned_name || "—")}</td>
+        <td>${dia(r.created_dia)}</td>
+        <td>${dia(r.closed_dia)}</td>
+        <td class="num">${r.tma_seg != null ? horasH(r.tma_seg / 3600) : "—"}</td>
+        <td class="num">${horasH(r.alvo_horas)}</td>
+        <td class="num">${atraso(r)}</td>
+      </tr>`).join("");
+    $("tktModalBody").innerHTML = `
+      <p class="tkt-modal-sub">${esc(sub)}</p>
+      <div class="table-wrap"><table class="data">
+        <thead><tr>
+          <th>Ticket</th><th>Status</th><th>Analista</th><th>Aberto</th><th>Fechado</th>
+          <th class="num">TMA</th><th class="num">Alvo</th><th class="num">Atraso</th>
+        </tr></thead>
+        <tbody>${linhas || `<tr><td colspan="8" class="tkt-modal-empty">Nenhum ticket estourado no período.</td></tr>`}</tbody>
+      </table></div>`;
+  }
+  function fecharTktModal() { $("tktModal").hidden = true; }
+
   const RENDERS = {
     performance: () => { renderPerformance(); renderDiaHora(); renderDistTma(); renderCategoriasPerf(); },
     bot: renderBot,
@@ -1685,6 +1745,17 @@
     if (e.key === "Escape" && !$("qaModal").hidden) fecharQaModal();
   });
 
+  // Modal de SLA estourado: clique no badge da tabela abre; ✕/overlay/Esc fecham.
+  $("tabelaTktForm").addEventListener("click", (e) => {
+    const b = e.target.closest(".sla-badge");
+    if (b) abrirTktModal(b.dataset.form);
+  });
+  $("tktModalFechar").addEventListener("click", fecharTktModal);
+  $("tktModal").addEventListener("click", (e) => { if (e.target === $("tktModal")) fecharTktModal(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("tktModal").hidden) fecharTktModal();
+  });
+
   $("periodoTabs").addEventListener("click", (e) => {
     const tab = e.target.closest(".tab");
     if (!tab) return;
@@ -1775,12 +1846,13 @@
   });
   $("btnExportTktForm").addEventListener("click", () => {
     baixarCSV("tickets_por_formulario.csv",
-      ["Formulário", "Total", "Em aberto", "Fechados", "TMA (h)", "SLA alvo (h)", "% no SLA"],
+      ["Formulário", "Total", "Em aberto", "Fechados", "TMA (h)", "SLA alvo (h)", "% no SLA", "SLA estourado"],
       (estado.tktExport.forms || []).map((r) => [
         r.form_name, r.total, r.em_aberto, r.fechados,
         r.tma_mediana_h != null ? r.tma_mediana_h.toFixed(1) : "",
         r.alvo_horas != null ? r.alvo_horas : "",
         r.pct_dentro_sla != null ? r.pct_dentro_sla.toFixed(2) : "",
+        r.alvo_horas != null ? (r.sla_estourado || 0) : "",
       ]));
   });
   $("btnExportTktRanking").addEventListener("click", () => {
