@@ -9,7 +9,8 @@
     perfil: null,      // {is_gestor, agent_id, agent_name, email} — define gestão vs analista
     preset: "hoje",    // hoje | ontem | semana (dom–sáb) | mes — âncora = último dia com dados
     range: null,       // {inicio, fim} quando período personalizado ativo
-    fila: "todas",
+    fila: ["todas"],   // ARRAY = filas selecionadas (multi, somadas); STRING = tag:/orig:/eu
+
     secao: "performance",
     rankingSort: { col: "score", dir: "desc" },  // ordenação da tabela de ranking (gestão)
     rankingView: "fila",                         // "fila" (2 categorias) | "geral" (todo o Suporte)
@@ -204,9 +205,17 @@
     return grupos;
   }
 
-  function membrosDaFila(slug) {
-    const g = (estado.gruposFila || []).find((x) => x.slug === slug);
-    return g ? g.membros : [slug];
+  // Aceita um slug único (fila/tag/origem) OU um array de slugs de fila (multi-seleção):
+  // devolve a UNIÃO dos membros (fila_slugs crus), sem duplicar. Base e plantão de cada fila
+  // são conjuntos disjuntos no banco, então somar filas nunca conta o mesmo chat duas vezes.
+  function membrosDaFila(sel) {
+    const slugs = Array.isArray(sel) ? sel : [sel];
+    const out = new Set();
+    for (const slug of slugs) {
+      const g = (estado.gruposFila || []).find((x) => x.slug === slug);
+      (g ? g.membros : [slug]).forEach((m) => out.add(m));
+    }
+    return [...out];
   }
 
   // Linhas diárias da fila (somando os membros do grupo) — uma linha por dia.
@@ -217,7 +226,7 @@
       if (!membros.has(r.fila_slug) || !entre(r.dia, ini, fim)) continue;
       let acc = porDia.get(r.dia);
       if (!acc) {
-        acc = { dia: r.dia, fila_slug: slug };
+        acc = { dia: r.dia, fila_slug: Array.isArray(slug) ? "sel" : slug };
         for (const c of CAMPOS_CHATS_DIA) acc[c] = 0;
         porDia.set(r.dia, acc);
       }
@@ -390,7 +399,15 @@
   // TMA: mediana exata quando o filtro é um único dia; senão média ponderada.
   let categoriasReqSeq = 0;   // guarda de corrida (descarta resposta obsoleta da RPC)
 
-  async function preencherCategorias(tabelaId, subId, limite) {
+  // Encerramentos automáticos (inatividade/abandono) continuam contando em TODAS as métricas
+  // gerais — só são ocultados do top-10 da Performance (ocultar=true), onde poluiriam o "top
+  // por volume". A seção "Por Categoria" (ocultar=false) mostra tudo.
+  const CATEGORIAS_OCULTAS = new Set([
+    "Encerramento - Inatividade / Sem Resposta",
+    "Encerramento - Abandono pelo Cliente",
+  ]);
+
+  async function preencherCategorias(tabelaId, subId, limite, ocultar = false) {
     const tabela = $(tabelaId);
     if (!tabela) return;
     const p = periodo();
@@ -405,6 +422,8 @@
       return;
     }
     if (meuSeq !== categoriasReqSeq) return;   // filtro/período mudou: resposta velha
+    // Filtra ANTES do slice para não desperdiçar vaga do top com categoria oculta.
+    if (ocultar) cats = cats.filter((c) => !CATEGORIAS_OCULTAS.has(c.categoria_nome));
     cats = cats.slice(0, limite);
     const sub = $(subId);
     if (sub) sub.textContent =
@@ -422,7 +441,7 @@
   }
 
   function renderCategoriasPerf() {
-    preencherCategorias("tabelaCategoriasP", "subCategoriasP", 10);
+    preencherCategorias("tabelaCategoriasP", "subCategoriasP", 10, true);
   }
 
   // ══════════════ DIA X HORA ══════════════
@@ -1050,14 +1069,18 @@
     };
   }
 
-  function filaLabel(slug) {
-    const g = (estado.gruposFila || []).find((x) => x.slug === slug);
+  function filaLabel(sel) {
+    if (Array.isArray(sel)) {
+      const filas = sel.filter((s) => s !== "todas");
+      return filas.length ? filas.map(filaLabel).join(" + ") : "Todas as filas";
+    }
+    const g = (estado.gruposFila || []).find((x) => x.slug === sel);
     if (g) {
       const sufixo = g.dim === "tag" ? " (tag)" : g.dim === "origem" ? " (origem)" : "";
       return g.label + sufixo;
     }
-    const r = estado.dados.chatsDia.find((x) => x.fila_slug === slug);
-    return r ? r.fila_label : slug;
+    const r = estado.dados.chatsDia.find((x) => x.fila_slug === sel);
+    return r ? r.fila_label : sel;
   }
 
   // ── Bot (fase pré-humana): contenção/resolução do bot antes de cair na fila. ──
@@ -1218,8 +1241,13 @@
       if (r.csat_score != null && r.csat_score <= 2) a.neg++;
       for (const c of (r.criterios || [])) {
         if (c && c.nome != null && c.nota != null) {
-          let g = a.crit.get(c.nome); if (!g) { g = { soma: 0, n: 0 }; a.crit.set(c.nome, g); }
+          const key = qaNormCrit(c.nome);           // a IA varia caixa/acentos do mesmo critério
+          if (!key) continue;
+          let g = a.crit.get(key);
+          if (!g) { g = { soma: 0, n: 0, label: String(c.nome).trim() }; a.crit.set(key, g); }
           g.soma += Number(c.nota); g.n++;
+          const nova = String(c.nome).trim();        // prefere o rótulo com minúsculas/acentos
+          if (/[a-zà-ÿ]/.test(nova) && !/[a-zà-ÿ]/.test(g.label)) g.label = nova;
         }
       }
     }
@@ -1230,20 +1258,54 @@
     if (tb) tb.querySelector("tbody").innerHTML = lista.map((a) => {
       const media = a.nScore ? a.somaScore / a.nScore : null;
       const pior = qaCriterioMaisFraco(a);
-      return `<tr data-analista="${esc(String(a.id))}" tabindex="0">
+      const ultima = a.itens.reduce((m, r) => (r.dia > m ? r.dia : m), a.itens[0].dia);
+      return `<tr data-analista="${esc(String(a.id))}" data-nome="${esc(a.nome)}" tabindex="0">
         <td>${esc(a.nome)}</td>
         <td class="num">${int(a.itens.length)}</td>
         <td class="num">${media == null ? "—" : media.toFixed(1)}</td>
         <td class="num">${int(a.neg)}</td>
+        <td>${esc(KPIS.fmtDiaCurto(ultima))}</td>
         <td>${pior ? esc(pior.nome) + " (" + pior.media.toFixed(1) + ")" : "—"}</td>
       </tr>`;
-    }).join("") || `<tr><td colspan="5" class="empty-note">Sem auditorias no período</td></tr>`;
+    }).join("") || `<tr><td colspan="6" class="empty-note">Sem auditorias no período</td></tr>`;
+
+    // Autocomplete (datalist) + reaplica a busca ativa após o re-render.
+    const dl = $("qaAnalistasList");
+    if (dl) dl.innerHTML = lista.map((a) => `<option value="${esc(a.nome)}"></option>`).join("");
+    filtrarQaTabela();
+  }
+
+  // Normaliza o nome do critério (sem acento, maiúsculo, espaços colapsados) para agrupar
+  // variações que a IA devolve com grafias diferentes ("Conferência..." vs "CONFERENCIA...").
+  function qaNormCrit(s) {
+    return [...String(s).normalize("NFD")].filter((ch) => {
+      const cc = ch.charCodeAt(0); return cc < 0x300 || cc > 0x36f;   // remove diacríticos
+    }).join("").toUpperCase().replace(/\s+/g, " ").trim();
+  }
+
+  // Filtra as linhas da tabela QA pelo texto da busca (case-insensitive, ao vivo).
+  function filtrarQaTabela() {
+    const campo = $("qaBusca");
+    const q = ((campo && campo.value) || "").trim().toLowerCase();
+    const tb = $("tabelaQaAnalistas");
+    if (!tb) return;
+    let visiveis = 0;
+    tb.querySelectorAll("tbody tr[data-analista]").forEach((tr) => {
+      const ok = !q || (tr.getAttribute("data-nome") || "").toLowerCase().includes(q);
+      tr.style.display = ok ? "" : "none";
+      if (ok) visiveis++;
+    });
+    const vazio = tb.querySelector("tbody tr.qa-busca-vazia");
+    if (q && visiveis === 0 && !vazio) {
+      tb.querySelector("tbody").insertAdjacentHTML("beforeend",
+        `<tr class="qa-busca-vazia"><td colspan="6" class="empty-note">Nenhum analista encontrado</td></tr>`);
+    } else if ((!q || visiveis > 0) && vazio) { vazio.remove(); }
   }
 
   // Critérios ordenados por média de nota (asc) — o 1º é o mais fraco.
   function qaCriteriosOrdenados(a) {
-    return [...a.crit.entries()]
-      .map(([nome, g]) => ({ nome, media: g.soma / g.n }))
+    return [...a.crit.values()]
+      .map((g) => ({ nome: g.label, media: g.soma / g.n }))
       .sort((x, y) => x.media - y.media);
   }
   function qaCriterioMaisFraco(a) {
@@ -1261,11 +1323,14 @@
       : `<span class="qa-pill ${s <= 2 ? "ruim" : s >= 4 ? "bom" : "neutro"}">CSAT ${s}/5</span>`;
     const lista = (arr) => (arr && arr.length)
       ? `<ul class="qa-lista">${arr.map((x) => `<li>${esc(String(x))}</li>`).join("")}</ul>` : "";
+    const dias = a.itens.map((r) => r.dia).filter(Boolean).sort();
+    const span = dias.length
+      ? `Auditadas entre ${esc(KPIS.fmtDiaCurto(dias[0]))} e ${esc(KPIS.fmtDiaCurto(dias[dias.length - 1]))}`
+      : `Período ${esc(KPIS.fmtDiaCurto(p.inicio))}–${esc(KPIS.fmtDiaCurto(p.fim))}`;
     const cabec = `
       <div class="qa-rel-cabec">
         <h2>${esc(a.nome)}</h2>
-        <div class="qa-rel-meta">Período ${esc(KPIS.fmtDiaCurto(p.inicio))}–${esc(KPIS.fmtDiaCurto(p.fim))}
-          · ${a.itens.length} auditoria(s) · Score médio ${media == null ? "—" : media.toFixed(1)}</div>
+        <div class="qa-rel-meta">${span} · ${a.itens.length} auditoria(s) · Score médio ${media == null ? "—" : media.toFixed(1)}</div>
       </div>`;
     const consid = crits.length ? `
       <div class="qa-rel-consid">
@@ -1280,6 +1345,7 @@
         <div class="qa-cartao">
           <div class="qa-cartao-topo">
             <span class="qa-chat">Atendimento #${esc(String(r.chat_number ?? "—"))}</span>
+            <span class="qa-data">${esc(KPIS.fmtDiaCurto(r.dia))}</span>
             ${csatPill(r.csat_score)}
             <span class="qa-score">Score ${r.score == null ? "—" : Number(r.score).toFixed(1)}</span>
           </div>
@@ -1337,9 +1403,10 @@
     // Filtros de fila/tag/origem: só na Performance E só para a gestão (o analista vê o
     // total dele em todas as filas — não escolhe segmento).
     { const vis = (!ehAnalista() && estado.secao === "performance") ? "visible" : "hidden";
-      $("filaSelect").style.visibility = vis;
+      $("filaMulti").style.visibility = vis;
       $("tagSelect").style.visibility = vis;
-      $("origemSelect").style.visibility = vis; }
+      $("origemSelect").style.visibility = vis;
+      if (vis === "hidden") fecharFilaMulti(); }
     atualizarControlesData();
     RENDERS[estado.secao]();
     renderStatus();
@@ -1431,21 +1498,59 @@
     const g = estado.gruposFila;
     const optsDe = (dim) => g.filter((x) => x.dim === dim)
       .map((x) => `<option value="${esc(x.slug)}">${esc(x.label)}</option>`).join("");
-    // Três dropdowns independentes: Filas, Tags, Origem (mutuamente exclusivos).
-    $("filaSelect").innerHTML = optsDe("fila");
+    // Filas = múltipla escolha (checkboxes); Tags e Origem = dropdowns únicos. Os três são
+    // mutuamente exclusivos (escolher tag/origem zera as filas e vice-versa).
+    $("filaMultiPanel").innerHTML = g.filter((x) => x.dim === "fila").map((x) =>
+      `<label class="multi-opt"><input type="checkbox" value="${esc(x.slug)}"> ${esc(x.label)}</label>`
+    ).join("");
     $("tagSelect").innerHTML = `<option value="">Tag…</option>` + optsDe("tag");
     $("origemSelect").innerHTML = `<option value="">Origem…</option>` + optsDe("origem");
-    if (!g.some((x) => x.slug === estado.fila)) estado.fila = "todas";
+    // Preserva a seleção anterior se os slugs ainda existirem; senão, volta para "todas".
+    const existe = (s) => g.some((x) => x.slug === s);
+    if (Array.isArray(estado.fila)) {
+      const validos = estado.fila.filter(existe);
+      estado.fila = validos.length ? validos : ["todas"];
+    } else if (!existe(estado.fila)) {
+      estado.fila = ["todas"];
+    }
     sincronizarSeletores();
   }
 
-  // Fila, tag e origem são mutuamente exclusivos — estado.fila guarda um slug de fila
-  // OU de tag (tag:) OU de origem (orig:). Espelha o slug ativo nos três dropdowns.
+  // Fila, tag e origem são mutuamente exclusivos — estado.fila guarda um ARRAY de slugs de
+  // fila (multi) OU uma string de tag (tag:) OU de origem (orig:). Espelha o ativo nos controles.
   function sincronizarSeletores() {
     const s = estado.fila;
-    $("filaSelect").value = s.includes(":") ? "todas" : s;
-    $("tagSelect").value = s.startsWith("tag:") ? s : "";
-    $("origemSelect").value = s.startsWith("orig:") ? s : "";
+    const ehTag = typeof s === "string" && s.startsWith("tag:");
+    const ehOrig = typeof s === "string" && s.startsWith("orig:");
+    $("tagSelect").value = ehTag ? s : "";
+    $("origemSelect").value = ehOrig ? s : "";
+    atualizarFilaMulti();
+  }
+
+  // Reflete estado.fila nos checkboxes + rótulo do botão de filas. Quando a dimensão ativa é
+  // tag/origem (estado.fila é string), o botão mostra o default "Todas as filas".
+  function atualizarFilaMulti() {
+    const painel = $("filaMultiPanel");
+    if (!painel) return;
+    const arr = Array.isArray(estado.fila) ? estado.fila : [];
+    const marcados = new Set(arr.length ? arr : ["todas"]);
+    painel.querySelectorAll("input[type=checkbox]").forEach((b) => { b.checked = marcados.has(b.value); });
+    const especificas = [...marcados].filter((s) => s !== "todas");
+    const full = especificas.map(filaLabel).join(" + ");
+    const lbl = $("filaMultiLabel");
+    if (lbl) lbl.textContent = !especificas.length ? "Todas as filas"
+      : (full.length <= 32 ? full : `${especificas.length} filas`);
+    const btn = $("filaMultiBtn");
+    if (btn) btn.title = especificas.length ? full : "Todas as filas";
+  }
+
+  function fecharFilaMulti() {
+    const painel = $("filaMultiPanel");
+    if (painel && !painel.hidden) {
+      painel.hidden = true;
+      const btn = $("filaMultiBtn");
+      if (btn) btn.setAttribute("aria-expanded", "false");
+    }
   }
 
   // ── Cache local (degradação graciosa) ──
@@ -1560,6 +1665,9 @@
     if (window.innerWidth <= 768) fecharSidebar();
   });
 
+  // ── Busca por analista (autocomplete via datalist) ──
+  $("qaBusca").addEventListener("input", filtrarQaTabela);
+
   // ── Modal do relatório 1:1 de Auditoria QA ──
   $("tabelaQaAnalistas").addEventListener("click", (e) => {
     const tr = e.target.closest("tr[data-analista]");
@@ -1604,25 +1712,51 @@
     render();
   });
 
-  // Filas, tags e origem são mutuamente exclusivos: escolher um zera os outros dois.
-  $("filaSelect").addEventListener("change", (e) => {
-    estado.fila = e.target.value;
+  // Filas (multi), tags e origem são mutuamente exclusivos: escolher um zera os outros.
+  // Abre/fecha o painel de filas.
+  $("filaMultiBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const painel = $("filaMultiPanel");
+    const abrir = painel.hidden;
+    painel.hidden = !abrir;
+    e.currentTarget.setAttribute("aria-expanded", String(abrir));
+  });
+  // Clique fora do seletor fecha o painel.
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#filaMulti")) fecharFilaMulti();
+  });
+  // Marcar/desmarcar filas soma as selecionadas. "Todas as filas" é exclusiva (zera as demais);
+  // marcar uma fila específica destrava de "todas". Nada marcado → volta para "todas".
+  $("filaMultiPanel").addEventListener("change", (e) => {
+    const cb = e.target.closest("input[type=checkbox]");
+    if (!cb) return;
+    const set = new Set(Array.isArray(estado.fila) ? estado.fila : []);
+    if (cb.checked) {
+      if (cb.value === "todas") { set.clear(); set.add("todas"); }
+      else { set.delete("todas"); set.add(cb.value); }
+    } else {
+      set.delete(cb.value);
+    }
+    let sel = [...set];
+    if (!sel.length) sel = ["todas"];
+    estado.fila = sel;
     $("tagSelect").value = "";
     $("origemSelect").value = "";
+    atualizarFilaMulti();
     render();
   });
 
   $("tagSelect").addEventListener("change", (e) => {
-    estado.fila = e.target.value || "todas";   // vazio = volta para todas as filas
-    $("filaSelect").value = "todas";
+    estado.fila = e.target.value || ["todas"];   // vazio = volta para todas as filas
     $("origemSelect").value = "";
+    atualizarFilaMulti();
     render();
   });
 
   $("origemSelect").addEventListener("change", (e) => {
-    estado.fila = e.target.value || "todas";
-    $("filaSelect").value = "todas";
+    estado.fila = e.target.value || ["todas"];
     $("tagSelect").value = "";
+    atualizarFilaMulti();
     render();
   });
 

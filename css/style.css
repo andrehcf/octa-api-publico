@@ -221,6 +221,31 @@ body {
 }
 .select-fila option { background: var(--surface); }
 
+/* Seletor de filas com múltipla escolha (checkboxes) — some no lugar do <select> antigo. */
+.select-fila.multi { position: relative; padding: 0; cursor: default; }
+.multi-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: transparent; border: none; color: var(--text);
+  font-family: inherit; font-size: 12px; padding: 7px 12px;
+  border-radius: 10px; cursor: pointer;
+}
+.multi-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.multi-caret { margin-left: auto; color: var(--muted); font-size: 10px; }
+.multi-panel {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 60;
+  min-width: 220px; max-height: 340px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+}
+.multi-panel[hidden] { display: none; }
+.multi-opt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px; border-radius: 7px; font-size: 12px; color: var(--text);
+  cursor: pointer; white-space: nowrap;
+}
+.multi-opt:hover { background: var(--surface2); }
+.multi-opt input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+
 .date-range {
   display: flex;
   align-items: center;
@@ -853,3 +878,17 @@ body:not(.modo-analista) .ranking-analista { display: none; }
 .foco-badge.foco-alto  { background: color-mix(in srgb, var(--kpi-green) 16%, transparent); color: var(--kpi-green); }
 .foco-badge.foco-medio { background: color-mix(in srgb, var(--kpi-amber) 16%, transparent); color: var(--kpi-amber); }
 .foco-badge.foco-baixo { background: var(--surface2); color: var(--muted); }
+
+/* Busca por analista na Auditoria QA + data da auditoria no relatório 1:1 */
+.qa-busca-wrap { flex-shrink: 0; }
+.qa-busca {
+  width: 220px; max-width: 46vw; padding: 7px 11px; font-size: 13px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 9px;
+}
+.qa-busca::placeholder { color: var(--muted); }
+.qa-busca:focus { outline: none; border-color: var(--accent); }
+.qa-data {
+  font-size: 12px; color: var(--muted); font-weight: 600;
+  background: var(--surface2); padding: 1px 8px; border-radius: 99px;
+}
