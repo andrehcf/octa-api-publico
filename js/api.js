@@ -7,6 +7,23 @@ const API = (() => {
   const cliente = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
   const PAGINA = 1000;  // teto por request do PostgREST (Supabase)
 
+  // Reexecuta uma query do Supabase quando o erro é TRANSITÓRIO (statement_timeout=57014,
+  // 504, esgotamento de conexão, rede) — o free-tier fica lento em rajadas e um único
+  // timeout de 8s derrubaria a carga inteira. Backoff curto (0,6s → 1,2s). Erro "real"
+  // (permissão, etc.) NÃO é reexecutado. Devolve {data, error} como o supabase-js.
+  async function comRetry(fazerQuery, tentativas = 3) {
+    let ultimo;
+    for (let i = 0; i < tentativas; i++) {
+      ultimo = await fazerQuery();
+      if (!ultimo.error) return ultimo;
+      const msg = (ultimo.error.message || "").toLowerCase();
+      const transitorio = /timeout|57014|53300|504|too many|fetch|network|terminat|econn/.test(msg);
+      if (!transitorio || i === tentativas - 1) return ultimo;
+      await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+    }
+    return ultimo;
+  }
+
   // Carrega TODAS as linhas de uma tabela paginando de 1000 em 1000, em série.
   // (Paralelizar as páginas estoura o statement timeout do free tier — a instância
   // não aguenta várias queries pesadas simultâneas.) A tabela grande — categorias —
@@ -16,9 +33,10 @@ const API = (() => {
     const cols = ordem.split(",").map((s) => s.trim());
     const todas = [];
     for (let de = 0; ; de += PAGINA) {
-      const q = cols.reduce((acc, c) => acc.order(c, { ascending: true }),
-        cliente.from(nome).select("*"));
-      const { data, error } = await q.range(de, de + PAGINA - 1);
+      // Nova query a cada tentativa (o builder do supabase-js é de uso único).
+      const { data, error } = await comRetry(() =>
+        cols.reduce((acc, c) => acc.order(c, { ascending: true }),
+          cliente.from(nome).select("*")).range(de, de + PAGINA - 1));
       if (error) throw new Error(`${nome}: ${error.message}`);
       todas.push(...(data || []));
       if (!data || data.length < PAGINA) break;
@@ -38,8 +56,8 @@ const API = (() => {
   // Categorias agregadas server-side para o segmento (membros) + período — retorna
   // ~25 linhas em vez de baixar a tabela inteira (~45k). Chamada sob demanda no render.
   async function categoriasPeriodo(membros, inicio, fim) {
-    const { data, error } = await cliente.rpc("categorias_periodo",
-      { p_slugs: membros, p_ini: inicio, p_fim: fim });
+    const { data, error } = await comRetry(() => cliente.rpc("categorias_periodo",
+      { p_slugs: membros, p_ini: inicio, p_fim: fim }));
     if (error) throw new Error(`categorias_periodo: ${error.message}`);
     return data || [];
   }
@@ -96,8 +114,8 @@ const API = (() => {
   // Chats por hora agregados server-side (dow × hora, ≤168 linhas) para os gráficos
   // horários — evita baixar a tabela inteira (~19k). Chamada sob demanda no render.
   async function chatsHoraPeriodo(membros, inicio, fim) {
-    const { data, error } = await cliente.rpc("chats_hora_periodo",
-      { p_slugs: membros, p_ini: inicio, p_fim: fim });
+    const { data, error } = await comRetry(() => cliente.rpc("chats_hora_periodo",
+      { p_slugs: membros, p_ini: inicio, p_fim: fim }));
     if (error) throw new Error(`chats_hora_periodo: ${error.message}`);
     return data || [];
   }
@@ -105,7 +123,7 @@ const API = (() => {
   // ── Tickets: tudo agregado server-side sob demanda (paridade com octa-api) ──
   // `f` = { forms:[], status:[], analistas:[], ini, fim, porFechamento }.
   async function _rpc(nome, params) {
-    const { data, error } = await cliente.rpc(nome, params);
+    const { data, error } = await comRetry(() => cliente.rpc(nome, params));
     if (error) throw new Error(`${nome}: ${error.message}`);
     return data;
   }
