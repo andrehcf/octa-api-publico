@@ -329,6 +329,7 @@
     const stats = $("statsTmaDist");
     const min1 = (x) => (x == null ? "—" : x.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " min");
     const semDados = () => {
+      estado.distTmaExport = null;   // desabilita o export enquanto não há dados
       if (stats) stats.textContent = "Sem dados no período";
       novoChart("chartTmaDistP", { type: "bar", data: { labels: [], datasets: [{ data: [] }] },
         options: opts({ y: { beginAtZero: true } }) });
@@ -363,6 +364,9 @@
     const periodoLbl = p.inicio === p.fim
       ? KPIS.fmtDiaCurto(p.inicio)
       : `${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)}`;
+    // Guarda o agregado já calculado (em memória) p/ o export Excel — sem query nova ao banco.
+    estado.distTmaExport = { labels, counts, media, p50, p90, p95, n,
+      filaLbl: filaLabel(estado.fila), ini: p.inicio, fim: p.fim };
     if (stats) stats.innerHTML =
       `${periodoLbl} · ${filaLabel(estado.fila)} · Média <b>${min1(media)}</b> · ` +
       `P50 <b>${min1(p50)}</b> · P90 <b>${min1(p90)}</b> · P95 <b>${min1(p95)}</b> · n <b>${KPIS.fmtInt(n)}</b>`;
@@ -832,6 +836,63 @@
     a.download = nomeArq;
     a.click();
     URL.revokeObjectURL(a.href);
+  }
+
+  // Gera um Excel (SpreadsheetML 2003 — XML puro, o Excel abre nativo) SEM biblioteca
+  // externa/CDN, respeitando a CSP. `abas` = [{nome, linhas}]; cada célula é primitivo
+  // (número vira Number) OU {v, s} com s = id de estilo ("t" título, "h" cabeçalho).
+  function baixarExcel(nomeArq, abas) {
+    const escX = (s) => String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const celula = (c) => {
+      let v = c, s = null;
+      if (c && typeof c === "object" && "v" in c) { v = c.v; s = c.s; }
+      const attr = s ? ` ss:StyleID="${s}"` : "";
+      if (typeof v === "number" && isFinite(v))
+        return `<Cell${attr}><Data ss:Type="Number">${v}</Data></Cell>`;
+      return `<Cell${attr}><Data ss:Type="String">${escX(v)}</Data></Cell>`;
+    };
+    const abaXml = (a) =>
+      `<Worksheet ss:Name="${escX(a.nome)}"><Table>` +
+      a.linhas.map((row) => `<Row>${(row || []).map(celula).join("")}</Row>`).join("") +
+      `</Table></Worksheet>`;
+    const xml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n' +
+      '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"' +
+      ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">' +
+      '<Styles>' +
+      '<Style ss:ID="t"><Font ss:Bold="1" ss:Size="13"/></Style>' +
+      '<Style ss:ID="h"><Font ss:Bold="1"/><Interior ss:Color="#E8EAF0" ss:Pattern="Solid"/></Style>' +
+      '</Styles>' + abas.map(abaXml).join("") + '</Workbook>';
+    const blob = new Blob(["﻿" + xml], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = nomeArq;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // Exporta a Distribuição de TMA (agregado já em memória — ZERO impacto no banco).
+  function exportarDistTma() {
+    const d = estado.distTmaExport;
+    if (!d) return;   // sem dados no período/fila atuais
+    const r1 = (x) => (x == null ? "" : Math.round(x * 10) / 10);
+    const linhas = [
+      [{ v: "Distribuição de TMA — Resumo", s: "t" }],
+      [`Período: ${d.ini} a ${d.fim} · Fila: ${d.filaLbl}`],
+      [],
+      [{ v: "Faixa", s: "h" }, { v: "Qtde. chats", s: "h" }],
+      ...d.labels.map((lab, i) => [lab, d.counts[i] || 0]),
+      [],
+      [{ v: "Estatísticas", s: "h" }, ""],
+      ["Média (min)", r1(d.media)],
+      ["P50 (min)", r1(d.p50)],
+      ["P90 (min)", r1(d.p90)],
+      ["P95 (min)", r1(d.p95)],
+      ["N (chats)", d.n],
+    ];
+    baixarExcel(`distribuicao_tma_${d.ini}_${d.fim}.xls`, [{ nome: "Resumo", linhas }]);
   }
 
   // ══════════════ CATEGORIAS ══════════════
@@ -1846,6 +1907,7 @@
     estado.tkt.porFechamento = btn.dataset.fech === "1";
     renderTickets();
   });
+  $("btnExportDistTma").addEventListener("click", exportarDistTma);
   $("btnExportTktForm").addEventListener("click", () => {
     baixarCSV("tickets_por_formulario.csv",
       ["Formulário", "Total", "Em aberto", "Fechados", "TMA (h)", "SLA alvo (h)", "% no SLA", "SLA estourado"],
