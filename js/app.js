@@ -873,12 +873,17 @@
     URL.revokeObjectURL(a.href);
   }
 
-  // Exporta a Distribuição de TMA (agregado já em memória — ZERO impacto no banco).
-  function exportarDistTma() {
+  // Exporta a Distribuição de TMA. Aba "Resumo" = agregado da fila (já em memória, zero
+  // banco). Aba "Por analista" = lida sob demanda via RPC tma_dist_analista_periodo (reusa
+  // agg_analista_tma_dist_dia, sem espaço novo; escopada por RLS — gestor vê todos).
+  async function exportarDistTma() {
     const d = estado.distTmaExport;
     if (!d) return;   // sem dados no período/fila atuais
     const r1 = (x) => (x == null ? "" : Math.round(x * 10) / 10);
-    const linhas = [
+    const btn = $("btnExportDistTma");
+    if (btn) btn.disabled = true;
+
+    const abas = [{ nome: "Resumo", linhas: [
       [{ v: "Distribuição de TMA — Resumo", s: "t" }],
       [`Período: ${d.ini} a ${d.fim} · Fila: ${d.filaLbl}`],
       [],
@@ -891,8 +896,39 @@
       ["P90 (min)", r1(d.p90)],
       ["P95 (min)", r1(d.p95)],
       ["N (chats)", d.n],
-    ];
-    baixarExcel(`distribuicao_tma_${d.ini}_${d.fim}.xls`, [{ nome: "Resumo", linhas }]);
+    ] }];
+
+    // Aba por analista (todas as filas — a tabela por-analista não é separada por fila).
+    try {
+      const rows = await API.tmaDistAnalistaPeriodo(d.ini, d.fim);
+      if (rows.length) {
+        const nomes = new Map((estado.dados.agentesDia || []).map((r) => [r.agent_id, r.agent_name]));
+        if (estado.perfil && estado.perfil.agent_id)
+          nomes.set(estado.perfil.agent_id, estado.perfil.agent_name);
+        const labels = (rows[0].buckets || []).map((b) => b.label);
+        const cab = [{ v: "Analista", s: "h" }, ...labels.map((l) => ({ v: l, s: "h" })),
+          { v: "Total", s: "h" }, { v: "Média (min)", s: "h" },
+          { v: "P50 (min)", s: "h" }, { v: "P90 (min)", s: "h" }, { v: "P95 (min)", s: "h" }];
+        const linhasA = rows.map((a) => {
+          const bmap = new Map((a.buckets || []).map((b) => [b.label, b.count || 0]));
+          return [nomes.get(a.agent_id) || a.agent_id,
+            ...labels.map((l) => bmap.get(l) || 0),
+            a.n, r1(a.media_min), r1(a.p50_min), r1(a.p90_min), r1(a.p95_min)];
+        });
+        abas.push({ nome: "Por analista", linhas: [
+          [{ v: "Distribuição de TMA — Por analista (todas as filas)", s: "t" }],
+          [`Período: ${d.ini} a ${d.fim}`],
+          [],
+          cab,
+          ...linhasA,
+        ] });
+      }
+    } catch (e) {
+      console.error(e);   // sem a aba por-analista, ainda exporta o Resumo
+    }
+
+    if (btn) btn.disabled = false;
+    baixarExcel(`distribuicao_tma_${d.ini}_${d.fim}.xls`, abas);
   }
 
   // ══════════════ CATEGORIAS ══════════════

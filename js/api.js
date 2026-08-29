@@ -26,6 +26,15 @@ const API = (() => {
     return todas;
   }
 
+  // Distribuição de TMA por analista no período (só p/ o export Excel; sob demanda no
+  // clique). RPC SECURITY INVOKER → gestor vê todos, analista só o dele (RLS da tabela).
+  async function tmaDistAnalistaPeriodo(inicio, fim) {
+    const { data, error } = await cliente.rpc("tma_dist_analista_periodo",
+      { p_ini: inicio, p_fim: fim });
+    if (error) throw new Error(`tma_dist_analista_periodo: ${error.message}`);
+    return data || [];
+  }
+
   // Categorias agregadas server-side para o segmento (membros) + período — retorna
   // ~25 linhas em vez de baixar a tabela inteira (~45k). Chamada sob demanda no render.
   async function categoriasPeriodo(membros, inicio, fim) {
@@ -142,7 +151,7 @@ const API = (() => {
   }
 
   return {
-    carregarTudo, categoriasPeriodo, chatsHoraPeriodo, cliente,
+    carregarTudo, categoriasPeriodo, chatsHoraPeriodo, tmaDistAnalistaPeriodo, cliente,
     ticketsOpcoes, ticketsKpis, ticketsTimeseries,
     ticketsPorFormulario, ticketsPorStatus, ticketsRankingAnalistas, ticketsSlaEstourado,
     // modo analista
