@@ -15,7 +15,7 @@
     rankingSort: { col: "score", dir: "desc" },  // ordenação da tabela de ranking (gestão)
     rankingView: "fila",                         // "fila" (2 categorias) | "geral" (todo o Suporte)
     rankingRows: [],                             // analistas agregados do período (p/ re-ordenar/exportar)
-    tkt: { forms: [], status: "", analista: "", issue: "todos", porFechamento: false },  // filtros de tickets (forms = multi)
+    tkt: { forms: [], statuses: [], analista: "", issue: "todos", porFechamento: false },  // filtros de tickets (forms/statuses = multi)
     tktExport: { forms: [], ranking: [] },                              // último resultado p/ CSV
   };
 
@@ -704,7 +704,7 @@
     const t = estado.tkt;
     const f = {
       forms: t.forms || [],
-      status: t.status ? [t.status] : [],
+      status: t.statuses || [],
       analistas: t.analista ? [t.analista] : [],
       issue: t.issue || "todos",
       ini: p.inicio, fim: p.fim, porFechamento: t.porFechamento,
@@ -832,35 +832,45 @@
     const validos = new Set(forms);
     estado.tkt.forms = (estado.tkt.forms || []).filter((f) => validos.has(f));   // descarta os que sumiram
     atualizarTktFormMulti();
-    $("tktStatus").innerHTML = opt("", "Todos os status") + TKT_STATUS.map((s) => opt(s, s)).join("");
+    // Status = múltipla escolha (lista fixa TKT_STATUS); os indicadores somam os selecionados.
+    $("tktStatusMultiPanel").innerHTML = TKT_STATUS.map((s) =>
+      `<label class="multi-opt"><input type="checkbox" value="${esc(s)}"> ${esc(s)}</label>`).join("");
+    atualizarTktStatusMulti();
     // analistas = [{id, nome}] — value = assigned_id (o filtro casa todos os tickets da
     // pessoa, mesmo renomeada no Octadesk); label = nome atual.
     $("tktAnalista").innerHTML = opt("", "Todos os analistas") + (ops.analistas || []).map((a) => opt(a.id, a.nome)).join("");
   }
 
-  // Reflete estado.tkt.forms nos checkboxes + rótulo do botão. Sem seleção = todos.
-  function atualizarTktFormMulti() {
-    const painel = $("tktFormMultiPanel");
+  // Multi-seletor genérico da aba Tickets (sem exclusividade; vazio = todos). Reflete o array
+  // de estado nos checkboxes + rótulo do botão.
+  function atualizarTktMulti(panelId, labelId, btnId, valores, vazio, plural) {
+    const painel = $(panelId);
     if (!painel) return;
-    const sel = new Set(estado.tkt.forms || []);
+    const sel = new Set(valores || []);
     painel.querySelectorAll("input[type=checkbox]").forEach((b) => { b.checked = sel.has(b.value); });
-    const lbl = $("tktFormMultiLabel");
     const nomes = [...sel];
-    if (lbl) lbl.textContent = nomes.length === 0 ? "Todos os formulários"
+    const lbl = $(labelId);
+    if (lbl) lbl.textContent = nomes.length === 0 ? vazio
       : nomes.length === 1 && nomes[0].length <= 26 ? nomes[0]
-      : `${nomes.length} formulário${nomes.length > 1 ? "s" : ""}`;
-    const btn = $("tktFormMultiBtn");
-    if (btn) btn.title = nomes.length ? nomes.join(" · ") : "Todos os formulários";
+      : `${nomes.length} ${plural}`;
+    const btn = $(btnId);
+    if (btn) btn.title = nomes.length ? nomes.join(" · ") : vazio;
   }
+  const atualizarTktFormMulti = () =>
+    atualizarTktMulti("tktFormMultiPanel", "tktFormMultiLabel", "tktFormMultiBtn", estado.tkt.forms, "Todos os formulários", "formulários");
+  const atualizarTktStatusMulti = () =>
+    atualizarTktMulti("tktStatusMultiPanel", "tktStatusMultiLabel", "tktStatusMultiBtn", estado.tkt.statuses, "Todos os status", "status");
 
-  function fecharTktFormMulti() {
-    const painel = $("tktFormMultiPanel");
+  function fecharTktMulti(panelId, btnId) {
+    const painel = $(panelId);
     if (painel && !painel.hidden) {
       painel.hidden = true;
-      const btn = $("tktFormMultiBtn");
+      const btn = $(btnId);
       if (btn) btn.setAttribute("aria-expanded", "false");
     }
   }
+  const fecharTktFormMulti = () => fecharTktMulti("tktFormMultiPanel", "tktFormMultiBtn");
+  const fecharTktStatusMulti = () => fecharTktMulti("tktStatusMultiPanel", "tktStatusMultiBtn");
 
   // Download client-side de CSV (separador ';' + BOM p/ abrir certo no Excel pt-BR).
   function baixarCSV(nomeArq, cabecalho, linhas) {
@@ -1973,25 +1983,35 @@
   });
 
   // ── Filtros de Tickets (formulário/status/analista + toggle abertura/fechamento) ──
-  // Formulário = múltipla escolha: abre/fecha o painel, marca/desmarca (soma nos indicadores).
-  $("tktFormMultiBtn").addEventListener("click", (e) => {
-    e.stopPropagation();
-    const painel = $("tktFormMultiPanel");
-    const abrir = painel.hidden;
-    painel.hidden = !abrir;
-    e.currentTarget.setAttribute("aria-expanded", String(abrir));
+  // Formulário e Status = múltipla escolha (sem exclusividade): abre/fecha, marca/desmarca (soma).
+  const TKT_MULTI = [
+    { id: "tktFormMulti",   btn: "tktFormMultiBtn",   panel: "tktFormMultiPanel",   campo: "forms",    atualizar: atualizarTktFormMulti },
+    { id: "tktStatusMulti", btn: "tktStatusMultiBtn", panel: "tktStatusMultiPanel", campo: "statuses", atualizar: atualizarTktStatusMulti },
+  ];
+  for (const m of TKT_MULTI) {
+    const btn = $(m.btn), painel = $(m.panel);
+    if (!btn || !painel) continue;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      TKT_MULTI.forEach((o) => { if (o !== m) fecharTktMulti(o.panel, o.btn); });   // só um aberto por vez
+      const abrir = painel.hidden;
+      painel.hidden = !abrir;
+      btn.setAttribute("aria-expanded", String(abrir));
+    });
+    painel.addEventListener("change", (e) => {
+      const cb = e.target.closest("input[type=checkbox]");
+      if (!cb) return;
+      const set = new Set(estado.tkt[m.campo] || []);
+      if (cb.checked) set.add(cb.value); else set.delete(cb.value);
+      estado.tkt[m.campo] = [...set];
+      m.atualizar();
+      renderTickets();
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#tktFormMulti,#tktStatusMulti"))
+      TKT_MULTI.forEach((m) => fecharTktMulti(m.panel, m.btn));
   });
-  document.addEventListener("click", (e) => { if (!e.target.closest("#tktFormMulti")) fecharTktFormMulti(); });
-  $("tktFormMultiPanel").addEventListener("change", (e) => {
-    const cb = e.target.closest("input[type=checkbox]");
-    if (!cb) return;
-    const set = new Set(estado.tkt.forms || []);
-    if (cb.checked) set.add(cb.value); else set.delete(cb.value);
-    estado.tkt.forms = [...set];
-    atualizarTktFormMulti();
-    renderTickets();
-  });
-  $("tktStatus").addEventListener("change", (e) => { estado.tkt.status = e.target.value; renderTickets(); });
   $("tktAnalista").addEventListener("change", (e) => { estado.tkt.analista = e.target.value; renderTickets(); });
   $("tktIssue").addEventListener("change", (e) => { estado.tkt.issue = e.target.value; renderTickets(); });
   $("tktModoTabs").addEventListener("click", (e) => {
