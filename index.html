@@ -509,27 +509,74 @@
 
   <!-- ═══ SEÇÃO: CATEGORIAS ═══ -->
   <section class="section" id="sec-categorias">
-    <div class="chart-grid full">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Categorias de Atendimento</div>
-            <div class="card-subtitle" id="subCategorias">Top categorias por volume, com TMA mediana e CSAT</div>
+    <!-- Toggle Geral ↔ Por fila (só gestão), no estilo do Ranking -->
+    <div class="ranking-controls analista-hide" id="catControls" style="margin-bottom:14px">
+      <div class="tab-group" id="catViewTabs">
+        <button class="tab active" data-view="geral">Geral</button>
+        <button class="tab" data-view="fila">Por fila</button>
+      </div>
+    </div>
+
+    <!-- Geral: todas as filas somadas (comportamento de sempre) -->
+    <div id="categoriasGeral">
+      <div class="chart-grid full">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Categorias de Atendimento</div>
+              <div class="card-subtitle" id="subCategorias">Top categorias por volume, com TMA mediana e CSAT</div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data" id="tabelaCategorias">
+              <thead>
+                <tr>
+                  <th>Categoria</th>
+                  <th class="num">Volume</th>
+                  <th class="num">TMA mediana</th>
+                  <th class="num">CSAT</th>
+                  <th class="num">Respondidos</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
           </div>
         </div>
-        <div class="table-wrap">
-          <table class="data" id="tabelaCategorias">
-            <thead>
-              <tr>
-                <th>Categoria</th>
-                <th class="num">Volume</th>
-                <th class="num">TMA mediana</th>
-                <th class="num">CSAT</th>
-                <th class="num">Respondidos</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+      </div>
+    </div>
+
+    <!-- Por fila: 2 grupos (Est+Conv e Especializado), incluindo plantões — só gestão -->
+    <div id="categoriasPorFila" class="analista-hide" hidden>
+      <div class="chart-grid full">
+        <div class="card">
+          <div class="card-header"><div>
+            <div class="card-title">🎧 Estendido + Convencional <span class="cat-hint">· inclui plantões</span></div>
+            <div class="card-subtitle" id="subCategoriasEC">—</div>
+          </div></div>
+          <div class="table-wrap">
+            <table class="data" id="tabelaCategoriasEC">
+              <thead><tr>
+                <th>Categoria</th><th class="num">Volume</th><th class="num">TMA mediana</th>
+                <th class="num">CSAT</th><th class="num">Respondidos</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div>
+            <div class="card-title">⭐ Especializado <span class="cat-hint">· Canais · DD · Enterprise (inclui plantões)</span></div>
+            <div class="card-subtitle" id="subCategoriasESP">—</div>
+          </div></div>
+          <div class="table-wrap">
+            <table class="data" id="tabelaCategoriasESP">
+              <thead><tr>
+                <th>Categoria</th><th class="num">Volume</th><th class="num">TMA mediana</th>
+                <th class="num">CSAT</th><th class="num">Respondidos</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -728,10 +775,10 @@
   </div>
 </div>
 
-<script src="js/config.js?v=71"></script>
-<script src="js/kpis.js?v=71"></script>
-<script src="js/api.js?v=71"></script>
-<script src="js/app.js?v=71"></script>
+<script src="js/config.js?v=72"></script>
+<script src="js/kpis.js?v=72"></script>
+<script src="js/api.js?v=72"></script>
+<script src="js/app.js?v=72"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */

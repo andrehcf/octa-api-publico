@@ -14,6 +14,7 @@
     secao: "performance",
     rankingSort: { col: "score", dir: "desc" },  // ordenação da tabela de ranking (gestão)
     rankingView: "fila",                         // "fila" (2 categorias) | "geral" (todo o Suporte)
+    catView: "geral",                            // Por Categoria: "geral" (todas) | "fila" (Est+Conv / Especializado)
     rankingRows: [],                             // analistas agregados do período (p/ re-ordenar/exportar)
     tkt: { forms: [], statuses: [], analista: "", issue: "todos", porFechamento: false },  // filtros de tickets (forms/statuses = multi)
     tktExport: { forms: [], ranking: [] },                              // último resultado p/ CSV
@@ -401,7 +402,7 @@
 
   // Preenche uma tabela de categorias somando o período a partir de agg_categorias_dia.
   // TMA: mediana exata quando o filtro é um único dia; senão média ponderada.
-  let categoriasReqSeq = 0;   // guarda de corrida (descarta resposta obsoleta da RPC)
+  const catSeq = new Map();   // guarda de corrida POR TABELA (permite 2+ tabelas em paralelo)
 
   // Encerramentos automáticos (inatividade/abandono) continuam contando em TODAS as métricas
   // gerais — só são ocultados do top-10 da Performance (ocultar=true), onde poluiriam o "top
@@ -411,13 +412,22 @@
     "Encerramento - Abandono pelo Cliente",
   ]);
 
-  async function preencherCategorias(tabelaId, subId, limite, ocultar = false) {
+  // Grupos de fila da visão "Por fila" (mesmo mapeamento do ranking, ver sync/queries.py
+  // CATEGORIAS_FILA): plantão soma na fila-mãe. São conjuntos disjuntos.
+  const FILA_CATEGORIA = {
+    est_conv: ["estendido", "estendido-plantao", "convencional", "convencional-plantao"],
+    especializado: ["canais", "canais-plantao", "dd", "dd-plantao", "enterprise", "enterprise-plantao"],
+  };
+
+  // membrosOverride: usa filas explícitas (visão "Por fila") em vez do filtro global.
+  async function preencherCategorias(tabelaId, subId, limite, ocultar = false, membrosOverride = null) {
     const tabela = $(tabelaId);
     if (!tabela) return;
     const p = periodo();
     if (!p) return;
-    const meuSeq = ++categoriasReqSeq;
-    const membros = membrosDaFila(estado.fila);
+    const meuSeq = (catSeq.get(tabelaId) || 0) + 1;
+    catSeq.set(tabelaId, meuSeq);
+    const membros = membrosOverride || membrosDaFila(estado.fila);
     let cats;
     try {
       cats = await fonteCategorias(p.inicio, p.fim, membros);
@@ -425,7 +435,7 @@
       console.error(e);
       return;
     }
-    if (meuSeq !== categoriasReqSeq) return;   // filtro/período mudou: resposta velha
+    if (meuSeq !== catSeq.get(tabelaId)) return;   // esta tabela teve nova chamada (filtro/período mudou)
     // Filtra ANTES do slice para não desperdiçar vaga do top com categoria oculta.
     if (ocultar) cats = cats.filter((c) => !CATEGORIAS_OCULTAS.has(c.categoria_nome));
     cats = cats.slice(0, limite);
@@ -983,9 +993,21 @@
   // ══════════════ CATEGORIAS ══════════════
 
   function renderCategorias() {
+    // Toggle Geral ↔ Por fila (só gestão; analista sempre vê o próprio "Geral") — antes do
+    // guard de período p/ a troca de visão valer mesmo sem dados carregados.
+    const porFila = !ehAnalista() && estado.catView === "fila";
+    $("categoriasGeral").hidden = porFila;
+    const pf = $("categoriasPorFila");
+    if (pf) pf.hidden = !porFila;
+    if (!estado.dados) return;   // sem dados ainda: só a troca de visão acima
     const p = periodo();
     if (!p) return;
-    preencherCategorias("tabelaCategorias", "subCategorias", 20);
+    if (porFila) {
+      preencherCategorias("tabelaCategoriasEC", "subCategoriasEC", 20, false, FILA_CATEGORIA.est_conv);
+      preencherCategorias("tabelaCategoriasESP", "subCategoriasESP", 20, false, FILA_CATEGORIA.especializado);
+    } else {
+      preencherCategorias("tabelaCategorias", "subCategorias", 20);
+    }
   }
 
   // ══════════════ RANKING ══════════════
@@ -2094,6 +2116,15 @@
     document.querySelectorAll("#rankingViewTabs .tab").forEach((t) => t.classList.toggle("active", t === btn));
     $("rankingPorFila").hidden = estado.rankingView !== "fila";
     $("rankingGeral").hidden = estado.rankingView !== "geral";
+  });
+
+  // Alterna a visão de Por Categoria (gestão): "Geral" (todas as filas) ↔ "Por fila" (Est+Conv / Especializado).
+  $("catViewTabs").addEventListener("click", (e) => {
+    const btn = e.target.closest(".tab");
+    if (!btn) return;
+    estado.catView = btn.dataset.view;
+    document.querySelectorAll("#catViewTabs .tab").forEach((t) => t.classList.toggle("active", t === btn));
+    renderCategorias();
   });
 
   // ── Sidebar mobile ──
