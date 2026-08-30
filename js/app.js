@@ -1602,9 +1602,9 @@
     // total dele em todas as filas — não escolhe segmento).
     { const vis = (!ehAnalista() && estado.secao === "performance") ? "visible" : "hidden";
       $("filaMulti").style.visibility = vis;
-      $("tagSelect").style.visibility = vis;
-      $("origemSelect").style.visibility = vis;
-      if (vis === "hidden") fecharFilaMulti(); }
+      $("tagMulti").style.visibility = vis;
+      $("origemMulti").style.visibility = vis;
+      if (vis === "hidden") MULTI_DIMS.forEach(fecharMulti); }
     atualizarControlesData();
     RENDERS[estado.secao]();
     renderStatus();
@@ -1694,15 +1694,13 @@
   function popularFilas() {
     estado.gruposFila = construirGruposFila();
     const g = estado.gruposFila;
-    const optsDe = (dim) => g.filter((x) => x.dim === dim)
-      .map((x) => `<option value="${esc(x.slug)}">${esc(x.label)}</option>`).join("");
-    // Filas = múltipla escolha (checkboxes); Tags e Origem = dropdowns únicos. Os três são
-    // mutuamente exclusivos (escolher tag/origem zera as filas e vice-versa).
-    $("filaMultiPanel").innerHTML = g.filter((x) => x.dim === "fila").map((x) =>
-      `<label class="multi-opt"><input type="checkbox" value="${esc(x.slug)}"> ${esc(x.label)}</label>`
-    ).join("");
-    $("tagSelect").innerHTML = `<option value="">Tag…</option>` + optsDe("tag");
-    $("origemSelect").innerHTML = `<option value="">Origem…</option>` + optsDe("origem");
+    // Filas, Tags e Origem = três dropdowns de múltipla escolha (checkboxes), mutuamente
+    // exclusivos. Os indicadores somam os itens marcados da dimensão ativa.
+    const painelDe = (dim) => g.filter((x) => x.dim === dim).map((x) =>
+      `<label class="multi-opt"><input type="checkbox" value="${esc(x.slug)}"> ${esc(x.label)}</label>`).join("");
+    $("filaMultiPanel").innerHTML = painelDe("fila");
+    $("tagMultiPanel").innerHTML = painelDe("tag") || `<div class="multi-nota">Sem tags</div>`;
+    $("origemMultiPanel").innerHTML = painelDe("origem") || `<div class="multi-nota">Sem origens</div>`;
     // Preserva a seleção anterior se os slugs ainda existirem; senão, volta para "todas".
     const existe = (s) => g.some((x) => x.slug === s);
     if (Array.isArray(estado.fila)) {
@@ -1711,44 +1709,74 @@
     } else if (!existe(estado.fila)) {
       estado.fila = ["todas"];
     }
-    sincronizarSeletores();
+    atualizarSeletores();
   }
 
-  // Fila, tag e origem são mutuamente exclusivos — estado.fila guarda um ARRAY de slugs de
-  // fila (multi) OU uma string de tag (tag:) OU de origem (orig:). Espelha o ativo nos controles.
-  function sincronizarSeletores() {
-    const s = estado.fila;
-    const ehTag = typeof s === "string" && s.startsWith("tag:");
-    const ehOrig = typeof s === "string" && s.startsWith("orig:");
-    $("tagSelect").value = ehTag ? s : "";
-    $("origemSelect").value = ehOrig ? s : "";
-    atualizarFilaMulti();
+  // Fila, tag e origem: cada um é MÚLTIPLA ESCOLHA e mutuamente exclusivos entre si. estado.fila
+  // é um ARRAY de slugs de UMA dimensão (filas OU tags OU origens); escolher noutra dimensão zera
+  // as anteriores. "todas"/vazio = todas as filas (default). O backend soma via membrosDaFila.
+  const MULTI_DIMS = [
+    { dim: "fila",   btnId: "filaMultiBtn",   panelId: "filaMultiPanel",   labelId: "filaMultiLabel",   vazio: "Todas as filas", plural: "filas" },
+    { dim: "tag",    btnId: "tagMultiBtn",    panelId: "tagMultiPanel",    labelId: "tagMultiLabel",    vazio: "Tags…",          plural: "tags" },
+    { dim: "origem", btnId: "origemMultiBtn", panelId: "origemMultiPanel", labelId: "origemMultiLabel", vazio: "Origem…",        plural: "origens" },
+  ];
+
+  // Dimensão da seleção atual (pelo prefixo tag:/orig: dos slugs). "todas"/sem prefixo = fila.
+  function dimSel() {
+    const arr = Array.isArray(estado.fila) ? estado.fila : [estado.fila];
+    const s = arr.find((x) => x && x !== "todas") || "";
+    return s.startsWith("tag:") ? "tag" : s.startsWith("orig:") ? "origem" : "fila";
+  }
+  // Rótulo curto de um slug (sem o sufixo " (tag)/(origem)" que filaLabel acrescenta).
+  function labelSlug(slug) {
+    const g = (estado.gruposFila || []).find((x) => x.slug === slug);
+    return g ? g.label : slug;
   }
 
-  // Reflete estado.fila nos checkboxes + rótulo do botão de filas. Quando a dimensão ativa é
-  // tag/origem (estado.fila é string), o botão mostra o default "Todas as filas".
-  function atualizarFilaMulti() {
-    const painel = $("filaMultiPanel");
-    if (!painel) return;
-    const arr = Array.isArray(estado.fila) ? estado.fila : [];
-    const marcados = new Set(arr.length ? arr : ["todas"]);
-    painel.querySelectorAll("input[type=checkbox]").forEach((b) => { b.checked = marcados.has(b.value); });
-    const especificas = [...marcados].filter((s) => s !== "todas");
-    const full = especificas.map(filaLabel).join(" + ");
-    const lbl = $("filaMultiLabel");
-    if (lbl) lbl.textContent = !especificas.length ? "Todas as filas"
-      : (full.length <= 32 ? full : `${especificas.length} filas`);
-    const btn = $("filaMultiBtn");
-    if (btn) btn.title = especificas.length ? full : "Todas as filas";
+  // Espelha estado.fila nos TRÊS dropdowns: marca a dimensão ativa, zera as outras, ajusta rótulos.
+  function atualizarSeletores() {
+    const dimAtiva = dimSel();
+    const marcados = new Set(Array.isArray(estado.fila) ? estado.fila : []);
+    for (const d of MULTI_DIMS) {
+      const painel = $(d.panelId);
+      if (!painel) continue;
+      const ativo = d.dim === dimAtiva;
+      painel.querySelectorAll("input[type=checkbox]").forEach((b) => { b.checked = ativo && marcados.has(b.value); });
+      const especificas = ativo ? [...marcados].filter((s) => s !== "todas") : [];
+      const full = especificas.map(labelSlug).join(" + ");
+      const lbl = $(d.labelId);
+      if (lbl) lbl.textContent = !especificas.length ? d.vazio
+        : (full.length <= 30 ? full : `${especificas.length} ${d.plural}`);
+      const btn = $(d.btnId);
+      if (btn) btn.title = especificas.length ? full : d.vazio;
+    }
   }
 
-  function fecharFilaMulti() {
-    const painel = $("filaMultiPanel");
+  function fecharMulti(d) {
+    const painel = $(d.panelId);
     if (painel && !painel.hidden) {
       painel.hidden = true;
-      const btn = $("filaMultiBtn");
+      const btn = $(d.btnId);
       if (btn) btn.setAttribute("aria-expanded", "false");
     }
+  }
+
+  // Marca/desmarca um item. Trocar de dimensão zera a seleção anterior. "todas" (só na fila) é
+  // exclusiva; marcar específico destrava de "todas"; nada marcado → volta para ["todas"].
+  function aoMarcarMulti(dim, cb) {
+    const mesmaDim = dim === dimSel();
+    const set = new Set(mesmaDim && Array.isArray(estado.fila) ? estado.fila : []);
+    if (cb.checked) {
+      if (cb.value === "todas") { set.clear(); set.add("todas"); }
+      else { set.delete("todas"); set.add(cb.value); }
+    } else {
+      set.delete(cb.value);
+    }
+    let sel = [...set];
+    if (!sel.length) sel = ["todas"];
+    estado.fila = sel;
+    atualizarSeletores();
+    render();
   }
 
   // ── Cache local (degradação graciosa) ──
@@ -1922,52 +1950,26 @@
     render();
   });
 
-  // Filas (multi), tags e origem são mutuamente exclusivos: escolher um zera os outros.
-  // Abre/fecha o painel de filas.
-  $("filaMultiBtn").addEventListener("click", (e) => {
-    e.stopPropagation();
-    const painel = $("filaMultiPanel");
-    const abrir = painel.hidden;
-    painel.hidden = !abrir;
-    e.currentTarget.setAttribute("aria-expanded", String(abrir));
-  });
-  // Clique fora do seletor fecha o painel.
+  // Fila, tags e origem: cada um é múltipla escolha; abrir um fecha os outros; marcar item
+  // soma nos indicadores (escolher noutra dimensão zera as anteriores — ver aoMarcarMulti).
+  for (const d of MULTI_DIMS) {
+    const btn = $(d.btnId), painel = $(d.panelId);
+    if (!btn || !painel) continue;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      MULTI_DIMS.forEach((o) => { if (o !== d) fecharMulti(o); });   // só um painel aberto por vez
+      const abrir = painel.hidden;
+      painel.hidden = !abrir;
+      btn.setAttribute("aria-expanded", String(abrir));
+    });
+    painel.addEventListener("change", (e) => {
+      const cb = e.target.closest("input[type=checkbox]");
+      if (cb) aoMarcarMulti(d.dim, cb);
+    });
+  }
+  // Clique fora de qualquer seletor multi da barra fecha os três.
   document.addEventListener("click", (e) => {
-    if (!e.target.closest("#filaMulti")) fecharFilaMulti();
-  });
-  // Marcar/desmarcar filas soma as selecionadas. "Todas as filas" é exclusiva (zera as demais);
-  // marcar uma fila específica destrava de "todas". Nada marcado → volta para "todas".
-  $("filaMultiPanel").addEventListener("change", (e) => {
-    const cb = e.target.closest("input[type=checkbox]");
-    if (!cb) return;
-    const set = new Set(Array.isArray(estado.fila) ? estado.fila : []);
-    if (cb.checked) {
-      if (cb.value === "todas") { set.clear(); set.add("todas"); }
-      else { set.delete("todas"); set.add(cb.value); }
-    } else {
-      set.delete(cb.value);
-    }
-    let sel = [...set];
-    if (!sel.length) sel = ["todas"];
-    estado.fila = sel;
-    $("tagSelect").value = "";
-    $("origemSelect").value = "";
-    atualizarFilaMulti();
-    render();
-  });
-
-  $("tagSelect").addEventListener("change", (e) => {
-    estado.fila = e.target.value || ["todas"];   // vazio = volta para todas as filas
-    $("origemSelect").value = "";
-    atualizarFilaMulti();
-    render();
-  });
-
-  $("origemSelect").addEventListener("change", (e) => {
-    estado.fila = e.target.value || ["todas"];
-    $("tagSelect").value = "";
-    atualizarFilaMulti();
-    render();
+    if (!e.target.closest("#filaMulti,#tagMulti,#origemMulti")) MULTI_DIMS.forEach(fecharMulti);
   });
 
   // ── Filtros de Tickets (formulário/status/analista + toggle abertura/fechamento) ──

@@ -101,8 +101,20 @@
         </button>
         <div class="multi-panel" id="filaMultiPanel" role="group" aria-label="Filas" hidden></div>
       </div>
-      <select class="select-fila" id="tagSelect" title="Filtrar por tag"></select>
-      <select class="select-fila" id="origemSelect" title="Filtrar por origem do cliente"></select>
+      <div class="select-fila multi" id="tagMulti" title="Tags — selecione uma ou mais (os indicadores somam)">
+        <button type="button" class="multi-btn" id="tagMultiBtn" aria-haspopup="true" aria-expanded="false">
+          <span id="tagMultiLabel">Tags…</span>
+          <span class="multi-caret" aria-hidden="true">▾</span>
+        </button>
+        <div class="multi-panel" id="tagMultiPanel" role="group" aria-label="Tags" hidden></div>
+      </div>
+      <div class="select-fila multi" id="origemMulti" title="Origens — selecione uma ou mais (os indicadores somam)">
+        <button type="button" class="multi-btn" id="origemMultiBtn" aria-haspopup="true" aria-expanded="false">
+          <span id="origemMultiLabel">Origem…</span>
+          <span class="multi-caret" aria-hidden="true">▾</span>
+        </button>
+        <div class="multi-panel" id="origemMultiPanel" role="group" aria-label="Origens" hidden></div>
+      </div>
     </div>
   </div>
 
@@ -710,10 +722,10 @@
   </div>
 </div>
 
-<script src="js/config.js?v=69"></script>
-<script src="js/kpis.js?v=69"></script>
-<script src="js/api.js?v=69"></script>
-<script src="js/app.js?v=69"></script>
+<script src="js/config.js?v=70"></script>
+<script src="js/kpis.js?v=70"></script>
+<script src="js/api.js?v=70"></script>
+<script src="js/app.js?v=70"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */
