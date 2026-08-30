@@ -813,13 +813,23 @@
   // Popula os dropdowns de filtro de tickets (formulários/analistas via RPC; status fixo).
   const TKT_STATUS = ["Novo", "Em andamento", "Pendente", "Resolvido", "Cancelado"];
   async function popularTktFiltros() {
+    const painel = $("tktFormMultiPanel");
+    if (painel && !painel.querySelector(".multi-opt")) painel.innerHTML = `<div class="multi-nota">Carregando…</div>`;
     let ops;
-    try { ops = await API.ticketsOpcoes(); } catch (e) { console.error(e); return; }
+    try {
+      ops = await API.ticketsOpcoes();
+    } catch (e) {
+      console.error(e);
+      if (painel && !painel.querySelector(".multi-opt")) painel.innerHTML = `<div class="multi-nota">Formulários indisponíveis</div>`;
+      return;
+    }
     const opt = (v, txt) => `<option value="${esc(v)}">${esc(txt)}</option>`;
+    const forms = ops.forms || [];
     // Formulário = múltipla escolha (checkboxes); os indicadores somam os selecionados.
-    $("tktFormMultiPanel").innerHTML = (ops.forms || []).map((n) =>
-      `<label class="multi-opt"><input type="checkbox" value="${esc(n)}"> ${esc(n)}</label>`).join("");
-    const validos = new Set(ops.forms || []);
+    if (painel) painel.innerHTML = forms.length
+      ? forms.map((n) => `<label class="multi-opt"><input type="checkbox" value="${esc(n)}"> ${esc(n)}</label>`).join("")
+      : `<div class="multi-nota">Sem formulários</div>`;
+    const validos = new Set(forms);
     estado.tkt.forms = (estado.tkt.forms || []).filter((f) => validos.has(f));   // descarta os que sumiram
     atualizarTktFormMulti();
     $("tktStatus").innerHTML = opt("", "Todos os status") + TKT_STATUS.map((s) => opt(s, s)).join("");
@@ -1795,6 +1805,7 @@
         // Supabase lento/fora → exibe o último dado salvo em vez de tela em branco.
         estado.dados = cache.dados;
         reconstruirSegmentos();
+        popularTktFiltros();   // popula os filtros de ticket também no fallback (best-effort)
         render();
         const quando = new Date(cache.ts).toLocaleString("pt-BR",
           { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
