@@ -240,7 +240,7 @@ body {
 .multi-panel[hidden] { display: none; }
 /* Formulários (à esquerda da barra de tickets) abrem p/ a DIREITA — senão nomes longos
    jogam o painel pra fora da tela pela esquerda (o de fila fica à direita, mantém right:0). */
-#tktFormMultiPanel, #tktStatusMultiPanel { left: 0; right: auto; }
+#tktFormMultiPanel, #tktStatusMultiPanel, #tktAnalistaMultiPanel { left: 0; right: auto; }
 .multi-opt {
   display: flex; align-items: center; gap: 8px;
   padding: 7px 8px; border-radius: 7px; font-size: 12px; color: var(--text);
@@ -642,7 +642,7 @@ table.data td.num, table.data th.num { text-align: right; }
 /* ══════ MODO ANALISTA (isolamento por linha) ══════ */
 /* Esconde o que só faz sentido para a gestão: filtro de analista e ranking de tickets
    (o analista vê só os próprios dados). O grid de tickets vira uma coluna sem o ranking. */
-body.modo-analista #tktAnalista,
+body.modo-analista #tktAnalistaMulti,
 body.modo-analista .analista-hide { display: none !important; }
 body.modo-analista .chart-grid.two-one { grid-template-columns: 1fr; }
 
