@@ -1624,6 +1624,7 @@
 
   function render() {
     if (!estado.dados) return;
+    garantirChavesSecao();   // rede de segurança: seção sem lazy-load ainda → [] em vez de quebrar
     aplicarTemaCharts();   // GRID/texto dos gráficos acompanham o tema atual (claro/escuro)
     const [t, s] = TITULOS[estado.secao];
     $("pageTitle").textContent = t;
@@ -1842,6 +1843,42 @@
   }
 
   let ultimaCarga = 0;   // timestamp da última carga OK — evita refetch a cada troca de aba
+  // Tabelas que cada seção precisa ALÉM do core (chatsDia/tmaDistDia/syncInfo). Carregadas
+  // SOB DEMANDA quando a seção é aberta (lazy-load) → menos IO por acesso no free-tier.
+  // Performance/Tickets/Categorias não entram aqui (usam core + RPCs on-demand).
+  const SECAO_TABELAS = {
+    ranking:      [{ key: "agentesDia", nome: "agg_agentes_dia", ordem: "dia,agent_id" },
+                   { key: "agentesFilaDia", nome: "agg_agentes_fila_dia", ordem: "dia,agent_id,categoria_slug", fallback: true }],
+    reincidencia: [{ key: "reincMes", nome: "agg_reincidencia_mes", ordem: "mes" }],
+    bot:          [{ key: "botDia", nome: "agg_bot_dia", ordem: "dia,canal" },
+                   { key: "botHora", nome: "agg_bot_hora", ordem: "dia,hora" }],
+    qa:           [{ key: "qaResultados", nome: "agg_qa_resultados", ordem: "result_id", fallback: true }],
+  };
+  const secaoEmVoo = {};   // evita buscar a mesma seção 2×
+
+  // Garante que as tabelas da seção estejam carregadas (busca as que faltam). Só gestão —
+  // o modo analista carrega o próprio conjunto em carregarTudoAnalista.
+  async function garantirSecao(secao) {
+    if (ehAnalista() || !estado.dados) return;
+    const specs = (SECAO_TABELAS[secao] || []).filter((s) => estado.dados[s.key] === undefined);
+    if (!specs.length) return;
+    if (!secaoEmVoo[secao]) {
+      secaoEmVoo[secao] = API.carregarTabelas(specs)
+        .then((extra) => { Object.assign(estado.dados, extra); })
+        .catch((e) => { console.error(e); specs.forEach((s) => { estado.dados[s.key] = []; }); })
+        .finally(() => { delete secaoEmVoo[secao]; });
+    }
+    return secaoEmVoo[secao];
+  }
+
+  // Rede de segurança síncrona: se um render rodar antes do lazy-load, usa [] em vez de quebrar.
+  function garantirChavesSecao() {
+    if (!estado.dados) return;
+    (SECAO_TABELAS[estado.secao] || []).forEach((s) => {
+      if (estado.dados[s.key] === undefined) estado.dados[s.key] = [];
+    });
+  }
+
   async function carregar() {
     try {
       if (ehAnalista()) {
@@ -1849,10 +1886,11 @@
         reconstruirSegmentos();
         popularTktFiltros();   // formulários/status; o dropdown de analista fica escondido
       } else {
-        estado.dados = await API.carregarTudo();
+        estado.dados = await API.carregarCore();   // só o essencial da Performance; resto sob demanda
         reconstruirSegmentos();
         popularTktFiltros();   // dropdowns de tickets (formulários/analistas via RPC)
       }
+      await garantirSecao(estado.secao);   // garante a seção atual (F5/refresh numa seção não-padrão)
       $("errorBanner").classList.add("hidden");
       $("errorBanner").classList.remove("offline");
       render();
@@ -1912,7 +1950,7 @@
   })();
 
   // ── Eventos ──
-  $("nav").addEventListener("click", (e) => {
+  $("nav").addEventListener("click", async (e) => {
     const item = e.target.closest(".nav-item");
     if (!item) return;
     document.querySelectorAll(".nav-item").forEach((x) => x.classList.remove("active"));
@@ -1920,8 +1958,9 @@
     estado.secao = item.dataset.section;
     document.querySelectorAll(".section").forEach((s) => s.classList.remove("active"));
     $("sec-" + estado.secao).classList.add("active");
-    render();
     if (window.innerWidth <= 768) fecharSidebar();
+    await garantirSecao(estado.secao);   // lazy-load: busca as tabelas da seção sob demanda (gestão)
+    render();
   });
 
   // ── Busca por analista (autocomplete via datalist) ──
