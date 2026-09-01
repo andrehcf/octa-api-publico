@@ -16,7 +16,9 @@
     rankingView: "fila",                         // "fila" (2 categorias) | "geral" (todo o Suporte)
     catView: "geral",                            // Por Categoria: "geral" (todas) | "fila" (Est+Conv / Especializado)
     rankingRows: [],                             // analistas agregados do período (p/ re-ordenar/exportar)
-    tkt: { forms: [], statuses: [], analistas: [], issue: "todos", porFechamento: false },  // filtros de tickets (forms/statuses/analistas = multi)
+    tkt: { forms: [], statuses: [], analistas: [], issue: "todos", porFechamento: false },  // seleção PENDENTE dos filtros de tickets
+    tktAplicado: { forms: [], statuses: [], analistas: [], issue: "todos", porFechamento: false },  // filtros de fato aplicados (a query usa este)
+    tktPeriodoAplicado: null,                    // {inicio, fim} do último "Aplicar" (período também espera o botão)
     tktExport: { forms: [], ranking: [] },                              // último resultado p/ CSV
   };
 
@@ -707,11 +709,44 @@
 
   let tktReqSeq = 0;   // guarda de corrida das RPCs de tickets
 
+  // Os filtros/período de tickets esperam o botão "Aplicar": renderTickets usa o SNAPSHOT aplicado,
+  // não a seleção pendente (estado.tkt) nem o período global vivo.
+  const clonarFiltro = (t) => ({
+    forms: [...(t.forms || [])], statuses: [...(t.statuses || [])], analistas: [...(t.analistas || [])],
+    issue: t.issue || "todos", porFechamento: !!t.porFechamento,
+  });
+  const chaveTkt = (t, per) => JSON.stringify({
+    forms: [...(t.forms || [])].sort(), statuses: [...(t.statuses || [])].sort(),
+    analistas: [...(t.analistas || [])].sort(), issue: t.issue || "todos", porFechamento: !!t.porFechamento,
+    ini: per && per.inicio, fim: per && per.fim,
+  });
+  // Destaca o botão Aplicar quando a seleção pendente (+ período) difere do que está aplicado.
+  function marcarTktPendente() {
+    const btn = $("tktAplicar");
+    if (!btn || !estado.dados) return;
+    const pend = chaveTkt(estado.tkt, periodo()) !== chaveTkt(estado.tktAplicado, estado.tktPeriodoAplicado);
+    btn.classList.toggle("pendente", pend);
+  }
+  // Copia pendente → aplicado (filtros + período) e roda a query UMA vez.
+  function aplicarTkt() {
+    if (!estado.dados) return;
+    estado.tktAplicado = clonarFiltro(estado.tkt);
+    estado.tktPeriodoAplicado = periodo();
+    renderTickets();
+    marcarTktPendente();
+  }
+  // Período: instantâneo fora de Tickets; em Tickets só atualiza os inputs + marca pendente (sem query).
+  function renderOuAdiar() {
+    if (estado.secao === "tickets") { atualizarControlesData(); marcarTktPendente(); }
+    else render();
+  }
+
   async function renderTickets() {
-    const p = periodo();
+    if (!estado.dados) return;
+    const p = estado.tktPeriodoAplicado || periodo();
     if (!p) return;
     const meuSeq = ++tktReqSeq;
-    const t = estado.tkt;
+    const t = estado.tktAplicado || estado.tkt;
     const f = {
       forms: t.forms || [],
       status: t.statuses || [],
@@ -1972,7 +2007,12 @@
     $("sec-" + estado.secao).classList.add("active");
     if (window.innerWidth <= 768) fecharSidebar();
     await garantirSecao(estado.secao);   // lazy-load: busca as tabelas da seção sob demanda (gestão)
+    if (estado.secao === "tickets") {    // entrar em Tickets aplica a seleção+período atuais (nada pendente)
+      estado.tktAplicado = clonarFiltro(estado.tkt);
+      estado.tktPeriodoAplicado = periodo();
+    }
     render();
+    if (estado.secao === "tickets") marcarTktPendente();
   });
 
   // ── Busca por analista (autocomplete via datalist) ──
@@ -2013,7 +2053,7 @@
     tab.classList.add("active");
     estado.preset = tab.dataset.preset;
     estado.range = null;            // sai do modo personalizado
-    render();
+    renderOuAdiar();
   });
 
   // ── Período personalizado (data inicial/final) ──
@@ -2022,7 +2062,7 @@
     if (!a || !b) return;                       // precisa das duas datas
     estado.range = a <= b ? { inicio: a, fim: b } : { inicio: b, fim: a };
     document.querySelectorAll("#periodoTabs .tab").forEach((x) => x.classList.remove("active"));
-    render();
+    renderOuAdiar();
   }
   $("dataInicio").addEventListener("change", aplicarDatas);
   $("dataFim").addEventListener("change", aplicarDatas);
@@ -2030,7 +2070,7 @@
     estado.range = null;
     const tab = document.querySelector(`#periodoTabs .tab[data-preset="${estado.preset}"]`);
     if (tab) tab.classList.add("active");
-    render();
+    renderOuAdiar();
   });
 
   // Fila, tags e origem: cada um é múltipla escolha; abrir um fecha os outros; marcar item
@@ -2079,22 +2119,23 @@
       if (cb.checked) set.add(cb.value); else set.delete(cb.value);
       estado.tkt[m.campo] = [...set];
       m.atualizar();
-      renderTickets();
+      marcarTktPendente();   // espera o botão "Aplicar" p/ consultar
     });
   }
   document.addEventListener("click", (e) => {
     if (!e.target.closest("#tktFormMulti,#tktStatusMulti,#tktAnalistaMulti"))
       TKT_MULTI.forEach((m) => fecharTktMulti(m.panel, m.btn));
   });
-  $("tktIssue").addEventListener("change", (e) => { estado.tkt.issue = e.target.value; renderTickets(); });
+  $("tktIssue").addEventListener("change", (e) => { estado.tkt.issue = e.target.value; marcarTktPendente(); });
   $("tktModoTabs").addEventListener("click", (e) => {
     const btn = e.target.closest(".tab");
     if (!btn) return;
     document.querySelectorAll("#tktModoTabs .tab").forEach((x) => x.classList.remove("active"));
     btn.classList.add("active");
     estado.tkt.porFechamento = btn.dataset.fech === "1";
-    renderTickets();
+    marcarTktPendente();   // espera o botão "Aplicar"
   });
+  $("tktAplicar").addEventListener("click", aplicarTkt);
   $("btnExportDistTma").addEventListener("click", exportarDistTma);
   $("btnExportTktForm").addEventListener("click", () => {
     baixarCSV("tickets_por_formulario.csv",
