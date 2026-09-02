@@ -11,7 +11,10 @@ const API = (() => {
   // 504, esgotamento de conexão, rede) — o free-tier fica lento em rajadas e um único
   // timeout de 8s derrubaria a carga inteira. Backoff curto (0,6s → 1,2s). Erro "real"
   // (permissão, etc.) NÃO é reexecutado. Devolve {data, error} como o supabase-js.
-  async function comRetry(fazerQuery, tentativas = 3) {
+  // Retry SUAVE (2 tentativas): com a instância saturada, insistir muito = mais carga
+  // (thundering herd). Melhor falhar rápido pro cache. Backoff maior + jitter grande p/
+  // dessincronizar vários usuários. Só reexecuta erro transitório (57014/504/conn/rede).
+  async function comRetry(fazerQuery, tentativas = 2) {
     let ultimo;
     for (let i = 0; i < tentativas; i++) {
       ultimo = await fazerQuery();
@@ -19,26 +22,21 @@ const API = (() => {
       const msg = (ultimo.error.message || "").toLowerCase();
       const transitorio = /timeout|57014|53300|504|too many|fetch|network|terminat|econn/.test(msg);
       if (!transitorio || i === tentativas - 1) return ultimo;
-      // Backoff com JITTER: com vários usuários, evita "tempestade de retentativas"
-      // sincronizadas (todos batendo ao mesmo tempo) que pioraria a instância lenta.
-      await new Promise((r) => setTimeout(r, 600 * (i + 1) + Math.random() * 500));
+      await new Promise((r) => setTimeout(r, 900 + Math.random() * 900));
     }
     return ultimo;
   }
 
   // Carrega TODAS as linhas de uma tabela paginando de 1000 em 1000, em série.
-  // (Paralelizar as páginas estoura o statement timeout do free tier — a instância
-  // não aguenta várias queries pesadas simultâneas.) A tabela grande — categorias —
-  // saiu daqui e virou a RPC categorias_periodo (agregada server-side sob demanda).
-  // `ordem` = colunas da PK: usa o índice (OFFSET eficiente) e dá ordem estável.
-  async function tabela(nome, ordem) {
-    const cols = ordem.split(",").map((s) => s.trim());
+  // SEM `ORDER BY`: o front reordena/agrupa por dia no cliente de qualquer forma, e o sort
+  // server-side em work_mem=2MB era fonte de spill (temp = Disk IO). Paginação por `range`
+  // sobre a ordem física (tabelas pequenas ~2k linhas; TRUNCATE+INSERT do sync dá ordem estável).
+  async function tabela(nome) {
     const todas = [];
     for (let de = 0; ; de += PAGINA) {
       // Nova query a cada tentativa (o builder do supabase-js é de uso único).
       const { data, error } = await comRetry(() =>
-        cols.reduce((acc, c) => acc.order(c, { ascending: true }),
-          cliente.from(nome).select("*")).range(de, de + PAGINA - 1));
+        cliente.from(nome).select("*").range(de, de + PAGINA - 1));
       if (error) throw new Error(`${nome}: ${error.message}`);
       todas.push(...(data || []));
       if (!data || data.length < PAGINA) break;
@@ -76,9 +74,9 @@ const API = (() => {
   // no formato que os renders da equipe esperam: fila_slug 'eu' (segmento único).
   async function carregarTudoAnalista() {
     const [analistaDia, analistaTma, syncInfo] = await Promise.all([
-      tabela("agg_analista_dia", "dia,agent_id"),
-      tabela("agg_analista_tma_dist_dia", "dia,agent_id"),
-      tabela("sync_info", "id"),
+      tabela("agg_analista_dia"),
+      tabela("agg_analista_tma_dist_dia"),
+      tabela("sync_info"),
     ]);
     return {
       chatsDia: analistaDia.map((r) => ({ ...r, fila_slug: "eu", fila_label: "Meus indicadores" })),
@@ -135,11 +133,9 @@ const API = (() => {
     p_issue: f.issue || "todos",
   });
   const ticketsOpcoes         = ()  => _rpc("tickets_opcoes", {});                                  // {forms, analistas}
-  const ticketsKpis           = (f) => _rpc("tickets_kpis", _tktParams(f)).then((d) => (d && d[0]) || {});
-  const ticketsTimeseries     = (f) => _rpc("tickets_timeseries", _tktParams(f)).then((d) => d || []);
-  const ticketsPorFormulario  = (f) => _rpc("tickets_por_formulario", _tktParams(f)).then((d) => d || []);
-  const ticketsPorStatus      = (f) => _rpc("tickets_por_status", _tktParams(f)).then((d) => d || []);
-  const ticketsRankingAnalistas = (f) => _rpc("tickets_ranking_analistas", _tktParams(f)).then((d) => d || []);
+  // PAINEL: 1 RPC devolve tudo (kpis+timeseries+por_formulario+por_status+ranking) num JSON —
+  // 1 scan da tabela-fato em vez de 6. Substitui as 6 RPCs de tickets no render.
+  const ticketsPainel         = (f) => _rpc("tickets_painel", _tktParams(f));
   // Lista os tickets estourados de UM formulário (para a modal ao clicar na contagem).
   const ticketsSlaEstourado   = (f, formName) =>
     _rpc("tickets_sla_estourado", { ..._tktParams(f), p_form_name: formName }).then((d) => d || []);
@@ -149,28 +145,36 @@ const API = (() => {
   // carregarTabelas quando abertas. Corta ~2/3 das queries por acesso → muito menos IO
   // simultâneo no free-tier e login mais rápido. (Categorias/horas já são RPC on-demand.)
   async function carregarCore() {
-    const [chatsDia, tmaDistDia, syncInfo] = await Promise.all([
-      tabela("agg_chats_dia", "dia,fila_slug"),
-      tabela("agg_tma_distribuicao_dia", "dia,fila_slug"),
-      tabela("sync_info", "id"),
+    const [chatsDia, syncInfo] = await Promise.all([
+      tabela("agg_chats_dia"),   // agg_tma_distribuicao_dia saiu daqui → agora é a RPC dist_tma_periodo
+      tabela("sync_info"),
     ]);
-    return { chatsDia, tmaDistDia, syncInfo: syncInfo[0] || null };
+    return { chatsDia, syncInfo: syncInfo[0] || null };
   }
 
-  // Carrega tabelas adicionais sob demanda. specs: [{key, nome, ordem, fallback}]. Fallback
-  // []: se a tabela não existir/RLS barrar, a seção fica vazia em vez de quebrar.
+  // Distribuição de TMA do período agregada server-side (soma buckets + percentis ponderados) —
+  // ~1 objeto em vez de baixar ~2k linhas de agg_tma_distribuicao_dia. Chamada sob demanda no render.
+  async function distTmaPeriodo(membros, inicio, fim) {
+    const { data, error } = await comRetry(() => cliente.rpc("dist_tma_periodo",
+      { p_slugs: membros, p_ini: inicio, p_fim: fim }));
+    if (error) throw new Error(`dist_tma_periodo: ${error.message}`);
+    return data || null;
+  }
+
+  // Carrega tabelas adicionais sob demanda. specs: [{key, nome, fallback}]. Fallback []: se a
+  // tabela não existir/RLS barrar, a seção fica vazia em vez de quebrar.
   async function carregarTabelas(specs) {
     const dados = await Promise.all(specs.map((s) =>
-      s.fallback ? tabela(s.nome, s.ordem).catch(() => []) : tabela(s.nome, s.ordem)));
+      s.fallback ? tabela(s.nome).catch(() => []) : tabela(s.nome)));
     const out = {};
     specs.forEach((s, i) => { out[s.key] = dados[i]; });
     return out;
   }
 
   return {
-    carregarCore, carregarTabelas, categoriasPeriodo, chatsHoraPeriodo, tmaDistAnalistaPeriodo, cliente,
-    ticketsOpcoes, ticketsKpis, ticketsTimeseries,
-    ticketsPorFormulario, ticketsPorStatus, ticketsRankingAnalistas, ticketsSlaEstourado,
+    carregarCore, carregarTabelas, categoriasPeriodo, chatsHoraPeriodo, distTmaPeriodo,
+    tmaDistAnalistaPeriodo, cliente,
+    ticketsOpcoes, ticketsPainel, ticketsSlaEstourado,
     // modo analista
     meuPerfil, carregarTudoAnalista, categoriasPeriodoAnalista,
     chatsHoraPeriodoAnalista, meuRankingPeriodo,

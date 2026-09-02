@@ -326,7 +326,32 @@
   // Histograma/n/média somam os dias do período × membros da fila (aditivos, exatos);
   // percentis são exatos p/ 1 linha (dia único + fila única) e média ponderada por n
   // nos demais casos (multi-dia ou fila combinada).
-  function renderDistTma() {
+  // Modo analista: a distribuição dele já vem em memória (agg_analista_tma_dist_dia, fila_slug='eu').
+  // Agrega igual à RPC (soma buckets + percentis ponderados por n) e devolve o mesmo formato.
+  function agregarDistTmaAnalista(ini, fim) {
+    const rows = (estado.dados.tmaDistDia || []).filter((r) => entre(r.dia, ini, fim));
+    if (!rows.length) return { n: 0 };
+    const base0 = typeof rows[0].buckets === "string" ? JSON.parse(rows[0].buckets) : rows[0].buckets;
+    const counts = base0.map(() => 0);
+    let n = 0, mediaSoma = 0, p50Soma = 0, p90Soma = 0, p95Soma = 0;
+    for (const r of rows) {
+      const bs = typeof r.buckets === "string" ? JSON.parse(r.buckets) : r.buckets;
+      bs.forEach((b, i) => { counts[i] += b.count || 0; });
+      const ni = r.n || 0; n += ni;
+      if (r.media_min != null) mediaSoma += r.media_min * ni;
+      if (r.p50_min != null) p50Soma += r.p50_min * ni;
+      if (r.p90_min != null) p90Soma += r.p90_min * ni;
+      if (r.p95_min != null) p95Soma += r.p95_min * ni;
+    }
+    if (!n) return { n: 0 };
+    return {
+      n, media_min: mediaSoma / n, p50_min: p50Soma / n, p90_min: p90Soma / n, p95_min: p95Soma / n,
+      buckets: base0.map((b, i) => ({ label: b.label, count: counts[i] })),
+    };
+  }
+
+  let distTmaSeq = 0;   // guarda de corrida da RPC de distribuição
+  async function renderDistTma() {
     const p = periodo();
     if (!p) return;
     const stats = $("statsTmaDist");
@@ -338,31 +363,23 @@
         options: opts({ y: { beginAtZero: true } }) });
     };
 
-    const membros = new Set(membrosDaFila(estado.fila));
-    const rows = (estado.dados.tmaDistDia || [])
-      .filter((r) => membros.has(r.fila_slug) && entre(r.dia, p.inicio, p.fim));
-    if (!rows.length) return semDados();
+    // Distribuição agregada server-side (RPC dist_tma_periodo) — some a soma de buckets +
+    // percentis ponderados por n do cliente, sem baixar ~2k linhas. Fórmula idêntica.
+    const meuSeq = ++distTmaSeq;
+    const membros = membrosDaFila(estado.fila);
+    let d;
+    try {
+      d = ehAnalista()
+        ? await agregarDistTmaAnalista(p.inicio, p.fim)   // modo analista: já tem em memória
+        : await API.distTmaPeriodo(membros, p.inicio, p.fim);
+    } catch (e) { console.error(e); return; }
+    if (meuSeq !== distTmaSeq) return;   // filtro/período mudou: resposta velha
+    if (!d || !d.n) return semDados();
 
-    const base = typeof rows[0].buckets === "string" ? JSON.parse(rows[0].buckets) : rows[0].buckets;
-    const labels = base.map((b) => b.label);
-    const counts = base.map(() => 0);
-    let n = 0, mediaSoma = 0, p50Soma = 0, p90Soma = 0, p95Soma = 0;
-    for (const r of rows) {
-      const bs = typeof r.buckets === "string" ? JSON.parse(r.buckets) : r.buckets;
-      bs.forEach((b, i) => { counts[i] += b.count || 0; });
-      const ni = r.n || 0;
-      n += ni;
-      if (r.media_min != null) mediaSoma += r.media_min * ni;
-      if (r.p50_min != null) p50Soma += r.p50_min * ni;
-      if (r.p90_min != null) p90Soma += r.p90_min * ni;
-      if (r.p95_min != null) p95Soma += r.p95_min * ni;
-    }
-    if (!n) return semDados();
-    const media = mediaSoma / n;
-    const unico = rows.length === 1;   // 1 dia + 1 fila → percentis exatos do banco
-    const p50 = unico ? rows[0].p50_min : p50Soma / n;
-    const p90 = unico ? rows[0].p90_min : p90Soma / n;
-    const p95 = unico ? rows[0].p95_min : p95Soma / n;
+    const buckets = typeof d.buckets === "string" ? JSON.parse(d.buckets) : (d.buckets || []);
+    const labels = buckets.map((b) => b.label);
+    const counts = buckets.map((b) => b.count || 0);
+    const n = d.n, media = d.media_min, p50 = d.p50_min, p90 = d.p90_min, p95 = d.p95_min;
 
     const periodoLbl = p.inicio === p.fim
       ? KPIS.fmtDiaCurto(p.inicio)
@@ -758,18 +775,23 @@
     const pAnt = periodoAnterior(p);
     const fAnt = pAnt ? { ...f, ini: pAnt.inicio, fim: pAnt.fim } : null;
 
-    let kpis, kAnt, ts, forms, ranking, status;
+    // 1 RPC (tickets_painel) traz kpis+timeseries+por_formulario+por_status+ranking num JSON
+    // (1 scan da tabela-fato em vez de 6). O período ANTERIOR (só p/ os deltas dos KPIs) é a 2ª.
+    let painel, painelAnt;
     try {
-      [kpis, kAnt, ts, forms, ranking, status] = await Promise.all([
-        API.ticketsKpis(f),
-        fAnt ? API.ticketsKpis(fAnt) : Promise.resolve({}),
-        API.ticketsTimeseries(f),
-        API.ticketsPorFormulario(f),
-        API.ticketsRankingAnalistas(f),
-        API.ticketsPorStatus(f),
+      [painel, painelAnt] = await Promise.all([
+        API.ticketsPainel(f),
+        fAnt ? API.ticketsPainel(fAnt) : Promise.resolve({}),
       ]);
     } catch (e) { console.error(e); return; }
     if (meuSeq !== tktReqSeq) return;              // filtro/período mudou: resposta velha
+    painel = painel || {};
+    const kpis = painel.kpis || {};
+    const kAnt = (painelAnt && painelAnt.kpis) || {};
+    const ts = painel.timeseries || [];
+    const forms = painel.por_formulario || [];
+    const ranking = painel.ranking_analistas || [];
+    const status = painel.por_status || [];
     estado.tktExport = { forms, ranking };
 
     const setar = (id, v) => { const el = $(id); if (el) el.textContent = v; };
@@ -1890,7 +1912,7 @@
   }
 
   let ultimaCarga = 0;   // timestamp da última carga OK — evita refetch a cada troca de aba
-  // Tabelas que cada seção precisa ALÉM do core (chatsDia/tmaDistDia/syncInfo). Carregadas
+  // Tabelas que cada seção precisa ALÉM do core (chatsDia/syncInfo). Carregadas
   // SOB DEMANDA quando a seção é aberta (lazy-load) → menos IO por acesso no free-tier.
   // Performance/Tickets/Categorias não entram aqui (usam core + RPCs on-demand).
   const SECAO_TABELAS = {
