@@ -7,9 +7,14 @@
   const estado = {
     dados: null,
     perfil: null,      // {is_gestor, agent_id, agent_name, email} — define gestão vs analista
-    preset: "hoje",    // hoje | ontem | semana (dom–sáb) | mes — âncora = último dia com dados
+    preset: "hoje",    // hoje | ontem | semana (dom→hoje) | semana-passada (dom–sáb fechada)
+                       // | mes (dia 1→hoje) | mes-passado (mês fechado) — âncora = hoje (BRT)
     range: null,       // {inicio, fim} quando período personalizado ativo
-    fila: ["todas"],   // ARRAY = filas selecionadas (multi, somadas); STRING = tag:/orig:/eu
+    fila: ["todas"],   // seleção PENDENTE. ARRAY = filas (multi, somadas); STRING = tag:/orig:/eu
+    filaAplicada: ["todas"],   // seleção de fato aplicada — é ESTA que os renders leem.
+                               // Marcar um item só mexe em `fila`; o botão "Aplicar" copia
+                               // pendente → aplicada e re-renderiza UMA vez (evita re-render
+                               // a cada clique quando se escolhe várias filas/tags/origens).
 
     secao: "performance",
     rankingSort: { col: "score", dir: "desc" },  // ordenação da tabela de ranking (gestão)
@@ -132,8 +137,17 @@
       ini.setUTCDate(ini.getUTCDate() - 1); fim = new Date(ini);
     } else if (estado.preset === "semana") {
       ini.setUTCDate(ini.getUTCDate() - ref.getUTCDay());   // volta ao domingo (getUTCDay: 0=dom)
+    } else if (estado.preset === "semana-passada") {
+      // Semana anterior FECHADA: domingo→sábado (não to-date). Do domingo desta semana
+      // volta 7 dias (= domingo passado) e o fim é o sábado seguinte a ele.
+      ini.setUTCDate(ini.getUTCDate() - ref.getUTCDay() - 7);
+      fim = new Date(ini); fim.setUTCDate(fim.getUTCDate() + 6);
     } else if (estado.preset === "mes") {
       ini = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), 1));
+    } else if (estado.preset === "mes-passado") {
+      // Mês anterior FECHADO: dia 1 → último dia (dia 0 do mês atual devolve o último do anterior).
+      ini = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth() - 1, 1));
+      fim = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), 0));
     }                                                        // "hoje": ini = fim = hoje
     let inicio = iso(ini);
     const fimS = iso(fim);
@@ -243,12 +257,12 @@
   function renderPerformance() {
     const p = periodo();
     if (!p) return;
-    const linhas = linhasFilaPorDia(estado.fila, p.inicio, p.fim);
+    const linhas = linhasFilaPorDia(estado.filaAplicada, p.inicio, p.fim);
     const k = KPIS.kpisChats(linhas);
 
     const pAnt = periodoAnterior(p);
     const kAnt = pAnt
-      ? KPIS.kpisChats(linhasFilaPorDia(estado.fila, pAnt.inicio, pAnt.fim))
+      ? KPIS.kpisChats(linhasFilaPorDia(estado.filaAplicada, pAnt.inicio, pAnt.fim))
       : {};
 
     const setar = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
@@ -290,7 +304,7 @@
     const labels = linhas.map((r) => KPIS.fmtDiaCurto(r.dia));
     const subVol = $("subVolumeDia");
     if (subVol) subVol.textContent =
-      `${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)} — ${filaLabel(estado.fila)}`;
+      `${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)} — ${filaLabel(estado.filaAplicada)}`;
 
     novoChart("chartVolumeDia", {
       type: "line",
@@ -366,7 +380,7 @@
     // Distribuição agregada server-side (RPC dist_tma_periodo) — some a soma de buckets +
     // percentis ponderados por n do cliente, sem baixar ~2k linhas. Fórmula idêntica.
     const meuSeq = ++distTmaSeq;
-    const membros = membrosDaFila(estado.fila);
+    const membros = membrosDaFila(estado.filaAplicada);
     let d;
     try {
       d = ehAnalista()
@@ -386,9 +400,9 @@
       : `${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)}`;
     // Guarda o agregado já calculado (em memória) p/ o export Excel — sem query nova ao banco.
     estado.distTmaExport = { labels, counts, media, p50, p90, p95, n,
-      filaLbl: filaLabel(estado.fila), ini: p.inicio, fim: p.fim };
+      filaLbl: filaLabel(estado.filaAplicada), ini: p.inicio, fim: p.fim };
     if (stats) stats.innerHTML =
-      `${periodoLbl} · ${filaLabel(estado.fila)} · Média <b>${min1(media)}</b> · ` +
+      `${periodoLbl} · ${filaLabel(estado.filaAplicada)} · Média <b>${min1(media)}</b> · ` +
       `P50 <b>${min1(p50)}</b> · P90 <b>${min1(p90)}</b> · P95 <b>${min1(p95)}</b> · n <b>${KPIS.fmtInt(n)}</b>`;
     // Tooltip enriquecido: "N chats (X% do total)" + "Até aqui: Y%" (acumulado da
     // esquerda até a barra). Lê os counts do próprio dataset (já agregados no sync).
@@ -446,7 +460,7 @@
     if (!p) return;
     const meuSeq = (catSeq.get(tabelaId) || 0) + 1;
     catSeq.set(tabelaId, meuSeq);
-    const membros = membrosOverride || membrosDaFila(estado.fila);
+    const membros = membrosOverride || membrosDaFila(estado.filaAplicada);
     let cats;
     try {
       cats = await fonteCategorias(p.inicio, p.fim, membros);
@@ -487,7 +501,7 @@
     const meuSeq = ++diaHoraReqSeq;
     let linhas;   // linhas agregadas por (dow, hora) vindas da RPC
     try {
-      linhas = await fonteChatsHora(p.inicio, p.fim, membrosDaFila(estado.fila));
+      linhas = await fonteChatsHora(p.inicio, p.fim, membrosDaFila(estado.filaAplicada));
     } catch (e) {
       console.error(e);
       return;
@@ -1706,6 +1720,8 @@
       $("filaMulti").style.visibility = vis;
       $("tagMulti").style.visibility = vis;
       $("origemMulti").style.visibility = vis;
+      $("segAplicar").style.visibility = vis;   // "Aplicar" e "Limpar" acompanham os seletores
+      $("segLimpar").style.visibility = vis;
       if (vis === "hidden") MULTI_DIMS.forEach(fecharMulti); }
     atualizarControlesData();
     RENDERS[estado.secao]();
@@ -1811,7 +1827,11 @@
     } else if (!existe(estado.fila)) {
       estado.fila = ["todas"];
     }
+    // A poda acima é saneamento, não escolha do usuário: espelha na seleção aplicada para
+    // o botão não nascer "pendente" e os renders lerem os mesmos slugs.
+    estado.filaAplicada = Array.isArray(estado.fila) ? [...estado.fila] : estado.fila;
     atualizarSeletores();
+    marcarSegPendente();
   }
 
   // Fila, tag e origem: cada um é MÚLTIPLA ESCOLHA e mutuamente exclusivos entre si. estado.fila
@@ -1878,7 +1898,43 @@
     if (!sel.length) sel = ["todas"];
     estado.fila = sel;
     atualizarSeletores();
+    marcarSegPendente();   // espera o botão "Aplicar" p/ re-renderizar (evita 1 render por clique)
+  }
+
+  // ── Botão "Aplicar" da barra (fila/tags/origem) ──
+  // Espelha o padrão dos filtros de Tickets: marcar itens só altera a seleção PENDENTE
+  // (estado.fila); o botão copia pendente → aplicada e re-renderiza UMA vez. Sem isso,
+  // escolher 4 tags custava 4 renders — e nas seções que usam RPC (dist. de TMA, categorias,
+  // chats/hora) 4 idas ao Supabase.
+  const mesmaSel = (a, b) => {
+    const A = Array.isArray(a) ? a : [a], B = Array.isArray(b) ? b : [b];
+    return A.length === B.length && [...A].sort().join(" ") === [...B].sort().join(" ");
+  };
+  function marcarSegPendente() {
+    const btn = $("segAplicar");
+    if (!btn) return;
+    btn.classList.toggle("pendente", !mesmaSel(estado.fila, estado.filaAplicada));
+  }
+  function aplicarSeg() {
+    if (!estado.dados) return;
+    estado.filaAplicada = Array.isArray(estado.fila) ? [...estado.fila] : estado.fila;
     render();
+    marcarSegPendente();
+  }
+  // Volta tudo ao estado inicial: segmento = todas as filas, período = "Hoje" e datas
+  // personalizadas limpas. Aplica na hora (é um reset — não faz sentido ficar pendente).
+  function limparSeg() {
+    if (!estado.dados) return;
+    estado.fila = ["todas"];
+    estado.filaAplicada = ["todas"];
+    estado.range = null;              // descarta período personalizado
+    estado.preset = "hoje";
+    document.querySelectorAll("#periodoTabs .tab").forEach((x) =>
+      x.classList.toggle("active", x.dataset.preset === "hoje"));
+    MULTI_DIMS.forEach(fecharMulti);
+    atualizarSeletores();
+    marcarSegPendente();
+    renderOuAdiar();                 // em Tickets só atualiza os campos + marca pendente
   }
 
   // ── Cache local (degradação graciosa) ──
@@ -1905,7 +1961,7 @@
   function reconstruirSegmentos() {
     if (ehAnalista()) {
       estado.gruposFila = [{ slug: "eu", label: "Meus indicadores", membros: ["eu"], dim: "fila" }];
-      estado.fila = "eu";
+      estado.fila = estado.filaAplicada = "eu";   // analista não escolhe segmento: pendente = aplicada
     } else {
       popularFilas();
     }
@@ -1949,6 +2005,7 @@
   }
 
   async function carregar() {
+    mostrarLoading(true, "Carregando os dados…", "Buscando os indicadores no servidor");
     try {
       if (ehAnalista()) {
         estado.dados = await API.carregarTudoAnalista();   // RLS escopa ao próprio analista
@@ -1987,6 +2044,8 @@
         b.classList.remove("hidden");
         $("syncStatus").textContent = "Erro ao carregar";
       }
+    } finally {
+      mostrarLoading(false);   // sai SEMPRE — inclusive no fallback de cache e no erro
     }
   }
 
@@ -2028,7 +2087,16 @@
     document.querySelectorAll(".section").forEach((s) => s.classList.remove("active"));
     $("sec-" + estado.secao).classList.add("active");
     if (window.innerWidth <= 768) fecharSidebar();
-    await garantirSecao(estado.secao);   // lazy-load: busca as tabelas da seção sob demanda (gestão)
+    // Loading só quando a seção REALMENTE vai à rede (1º acesso a ela). Seção já em memória
+    // troca na hora — mostrar o overlay ali só causaria um flash inútil.
+    const precisaBuscar = !ehAnalista() && estado.dados
+      && (SECAO_TABELAS[estado.secao] || []).some((s) => estado.dados[s.key] === undefined);
+    if (precisaBuscar) mostrarLoading(true, "Carregando a seção…", item.textContent.trim());
+    try {
+      await garantirSecao(estado.secao);   // lazy-load: busca as tabelas da seção sob demanda (gestão)
+    } finally {
+      if (precisaBuscar) mostrarLoading(false);
+    }
     if (estado.secao === "tickets") {    // entrar em Tickets aplica a seleção+período atuais (nada pendente)
       estado.tktAplicado = clonarFiltro(estado.tkt);
       estado.tktPeriodoAplicado = periodo();
@@ -2116,6 +2184,8 @@
   document.addEventListener("click", (e) => {
     if (!e.target.closest("#filaMulti,#tagMulti,#origemMulti")) MULTI_DIMS.forEach(fecharMulti);
   });
+  $("segAplicar").addEventListener("click", aplicarSeg);
+  $("segLimpar").addEventListener("click", limparSeg);
 
   // ── Filtros de Tickets (formulário/status/analista + toggle abertura/fechamento) ──
   // Formulário, Status e Analista = múltipla escolha (sem exclusividade): abre/fecha, marca/desmarca (soma).
@@ -2269,6 +2339,62 @@
 
   function mostrarLogin(mostrar) {
     $("loginScreen").classList.toggle("hidden", !mostrar);
+    if (mostrar) mostrarLoading(false);   // login e loading nunca coexistem
+  }
+
+  // Tela de carregamento PROGRESSIVA. Fica ABAIXO do login no z-index (150 vs 200), então
+  // nunca o cobre; e mostrarLogin() a esconde por garantia.
+  //
+  // Por que progressiva: no free-tier o Supabase satura em rajadas (ver [[gotcha-disk-io-temp-sorts]])
+  // e a carga que levaria ~1s passa de 20s. Um spinner mudo faz o usuário achar que TRAVOU e dar
+  // F5 — e cada refresh soma carga a um banco já saturado. Trocando o texto conforme o tempo, ele
+  // entende que é lentidão passageira e espera. No dia normal nada disso aparece (sai antes dos 4s).
+  const LOADING_LENTO_MS = 4000;    // "está lento" + contador de tempo
+  const LOADING_CARGA_MS = 12000;   // "carga alta, tentando de novo" (casa com o comRetry do api.js)
+  let loadingTimers = [];
+  let loadingTick = null;
+
+  function limparLoadingTimers() {
+    loadingTimers.forEach(clearTimeout);
+    loadingTimers = [];
+    if (loadingTick) { clearInterval(loadingTick); loadingTick = null; }
+  }
+
+  function mostrarLoading(mostrar, texto, sub) {
+    const el = $("loadingScreen");
+    if (!el) return;
+    limparLoadingTimers();                    // sempre zera: evita timer órfão de uma carga anterior
+    el.classList.remove("lento", "carga");
+    const elTempo = $("loadingTempo");
+    if (elTempo) elTempo.textContent = "";
+
+    if (mostrar) {
+      $("loadingText").textContent = texto || "Carregando os dados…";
+      $("loadingSub").textContent = sub !== undefined ? sub : "Buscando os indicadores no servidor";
+      const t0 = Date.now();
+      // 4s: assume lentidão — mostra aviso + há quanto tempo espera.
+      loadingTimers.push(setTimeout(() => {
+        el.classList.add("lento");
+        $("loadingText").textContent = "Ainda carregando…";
+        $("loadingSub").textContent = "O servidor está mais lento que o normal";
+        $("loadingBadgeTxt").textContent = "Servidor lento";
+        const atualiza = () => {
+          if (elTempo) elTempo.textContent = `Aguardando há ${Math.round((Date.now() - t0) / 1000)}s`;
+        };
+        atualiza();
+        loadingTick = setInterval(atualiza, 1000);
+      }, LOADING_LENTO_MS));
+      // 12s: cenário de estouro de IO — promete o desfecho p/ o usuário não recarregar.
+      loadingTimers.push(setTimeout(() => {
+        el.classList.remove("lento");
+        el.classList.add("carga");
+        $("loadingText").textContent = "Servidor sob carga alta";
+        $("loadingSub").textContent = "Estamos tentando novamente — seus dados vão aparecer";
+        $("loadingBadgeTxt").textContent = "Tentando novamente";
+      }, LOADING_CARGA_MS));
+    }
+    el.classList.toggle("hidden", !mostrar);
+    el.setAttribute("aria-busy", String(!!mostrar));
   }
 
   async function iniciarSessao() {

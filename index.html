@@ -8,7 +8,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://dholqliulwtnrsjgxjqp.supabase.co https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="no-referrer">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=65">
+<link rel="stylesheet" href="css/style.css?v=68">
 <script>
   /* Anti-flash: aplica o tema salvo (ou o do sistema no 1º acesso) antes do render */
   (function () {
@@ -26,6 +26,18 @@
 <body>
 
 <div class="overlay" id="overlay"></div>
+
+<!-- ═══ LOADING (z-index 150: cobre a dashboard, mas fica ABAIXO do login z-200) ═══ -->
+<div class="loading-screen hidden" id="loadingScreen" role="status" aria-live="polite" aria-busy="true">
+  <div class="loading-box">
+    <div class="loading-spinner" aria-hidden="true"></div>
+    <div class="loading-text" id="loadingText">Carregando os dados…</div>
+    <div class="loading-sub" id="loadingSub">Buscando os indicadores no servidor</div>
+    <!-- Só aparecem quando a carga passa de 4s (classes .lento/.carga) — ver mostrarLoading() -->
+    <div class="loading-badge" id="loadingBadge"><span class="loading-dot" aria-hidden="true"></span><span id="loadingBadgeTxt">Servidor lento</span></div>
+    <div class="loading-tempo" id="loadingTempo"></div>
+  </div>
+</div>
 
 <!-- ═══ LOGIN (cobre tudo até autenticar) ═══ -->
 <div class="login-screen" id="loginScreen">
@@ -86,7 +98,9 @@
         <button class="tab active" data-preset="hoje">Hoje</button>
         <button class="tab" data-preset="ontem">Ontem</button>
         <button class="tab" data-preset="semana">Essa semana</button>
+        <button class="tab" data-preset="semana-passada">Semana passada</button>
         <button class="tab" data-preset="mes">Esse mês</button>
+        <button class="tab" data-preset="mes-passado">Mês passado</button>
       </div>
       <div class="date-range" id="dateRange" title="Período personalizado">
         <input type="date" id="dataInicio" class="date-input" aria-label="Data inicial">
@@ -115,6 +129,8 @@
         </button>
         <div class="multi-panel" id="origemMultiPanel" role="group" aria-label="Origens" hidden></div>
       </div>
+      <button class="btn-aplicar" id="segAplicar" type="button" title="Aplicar os filtros de fila, tags e origem selecionados">Aplicar</button>
+      <button class="btn-limpar" id="segLimpar" type="button" title="Limpar filtros: volta para Todas as filas, período Hoje e limpa datas personalizadas">Limpar</button>
     </div>
   </div>
 
@@ -782,10 +798,10 @@
   </div>
 </div>
 
-<script src="js/config.js?v=76"></script>
-<script src="js/kpis.js?v=76"></script>
-<script src="js/api.js?v=76"></script>
-<script src="js/app.js?v=76"></script>
+<script src="js/config.js?v=79"></script>
+<script src="js/kpis.js?v=79"></script>
+<script src="js/api.js?v=79"></script>
+<script src="js/app.js?v=79"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */
