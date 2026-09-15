@@ -2015,7 +2015,7 @@
   }
 
   async function carregar() {
-    mostrarLoading(true, "Carregando os dados…", "Buscando os indicadores no servidor");
+    const loading = loadingSeDemorar("Carregando os dados…", "Buscando os indicadores no servidor");
     try {
       if (ehAnalista()) {
         estado.dados = await API.carregarTudoAnalista();   // RLS escopa ao próprio analista
@@ -2055,7 +2055,7 @@
         $("syncStatus").textContent = "Erro ao carregar";
       }
     } finally {
-      mostrarLoading(false);   // sai SEMPRE — inclusive no fallback de cache e no erro
+      loading.parar();   // sai SEMPRE — inclusive no fallback de cache e no erro
     }
   }
 
@@ -2101,11 +2101,11 @@
     // troca na hora — mostrar o overlay ali só causaria um flash inútil.
     const precisaBuscar = !ehAnalista() && estado.dados
       && (SECAO_TABELAS[estado.secao] || []).some((s) => estado.dados[s.key] === undefined);
-    if (precisaBuscar) mostrarLoading(true, "Carregando a seção…", item.textContent.trim());
+    const loading = precisaBuscar ? loadingSeDemorar("Carregando a seção…", item.textContent.trim()) : null;
     try {
       await garantirSecao(estado.secao);   // lazy-load: busca as tabelas da seção sob demanda (gestão)
     } finally {
-      if (precisaBuscar) mostrarLoading(false);
+      if (loading) loading.parar();
     }
     if (estado.secao === "tickets") {    // entrar em Tickets aplica a seleção+período atuais (nada pendente)
       estado.tktAplicado = clonarFiltro(estado.tkt);
@@ -2407,6 +2407,15 @@
     el.setAttribute("aria-busy", String(!!mostrar));
   }
 
+  // Com o cache, a maioria das cargas termina em poucos milissegundos. Mostrar o loading na
+  // hora faria a tela piscar; então ele só aparece se a carga passar de LOADING_ATRASO_MS.
+  const LOADING_ATRASO_MS = 250;
+  function loadingSeDemorar(texto, sub) {
+    let mostrado = false;
+    const t = setTimeout(() => { mostrado = true; mostrarLoading(true, texto, sub); }, LOADING_ATRASO_MS);
+    return { parar() { clearTimeout(t); if (mostrado) mostrarLoading(false); } };
+  }
+
   async function iniciarSessao() {
     mostrarLogin(false);
     await documentoPronto;
@@ -2438,6 +2447,7 @@
     estado.dados = null;
     estado.perfil = null;
     try { localStorage.removeItem(CACHE_KEY); } catch (e) {}   // não vaza dado entre logins no mesmo PC
+    API.limparCache();       // idem para as respostas guardadas no IndexedDB (js/cache.js)
     voltarPeriodoPadrao();   // próximo login abre em "Ontem", não no período deixado por quem saiu
     mostrarLogin(true);
   }
@@ -2473,7 +2483,8 @@
 
   // Sem polling periódico e SEM refetch a cada troca de aba: os dados só mudam no sync
   // (~1x/dia). Ao voltar pra aba, só recarrega se a última carga está VELHA (> 30 min) —
-  // evita rebater a cada alt-tab (economia de IO no Supabase). F5 sempre força dados frescos.
+  // evita rebater a cada alt-tab (economia de IO no Supabase). F5 sempre reconfere a versão da
+  // publicação no banco: se o sync publicou algo, busca de novo; senão, usa o cache.
   const REFRESH_VELHO_MS = 30 * 60 * 1000;
   document.addEventListener("visibilitychange", () => {
     if (logado && document.visibilityState === "visible"

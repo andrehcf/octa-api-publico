@@ -14,4 +14,8 @@ const CONFIG = {
   // Pesos do score do ranking (mesmos defaults da dashboard interna)
   PESOS: { volume: 1, engajamento: 1, csat: 2, resolvidos: 2, tma: 1 },
   TMA_LIMITE_MIN: 30,
+
+  // Cache no navegador (js/cache.js). false = desliga para todos (volta a consultar o banco a
+  // cada tela). Para desligar só numa aba, abra a dashboard com ?nocache na URL.
+  CACHE_ATIVO: true,
 };
