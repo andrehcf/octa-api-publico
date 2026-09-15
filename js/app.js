@@ -1,13 +1,19 @@
 // ══════════════════════════════════════════════════════════════
 // Dashboard pública CPlug Suporte — estado, filtros e renderização.
-// Dados: tabelas agg_* do Supabase (janela móvel de ~120 dias).
+// Dados: tabelas agg_* do Supabase (janela móvel = JANELA_DIAS do sync).
 // ══════════════════════════════════════════════════════════════
 
 (() => {
+  // Período com que a dashboard abre (e para onde "Limpar" e o logout voltam). É "ontem" porque
+  // a regra combinada com os usuários é "dados até o dia anterior": o sync diário publica cedo e
+  // o dia corrente só tem dado depois de um sync manual. O atalho "Hoje" continua disponível
+  // justamente para esses syncs manuais.
+  const PRESET_PADRAO = "ontem";
+
   const estado = {
     dados: null,
     perfil: null,      // {is_gestor, agent_id, agent_name, email} — define gestão vs analista
-    preset: "hoje",    // hoje | ontem | semana (dom→hoje) | semana-passada (dom–sáb fechada)
+    preset: PRESET_PADRAO,  // hoje | ontem | semana (dom→hoje) | semana-passada (dom–sáb fechada)
                        // | mes (dia 1→hoje) | mes-passado (mês fechado) — âncora = hoje (BRT)
     range: null,       // {inicio, fim} quando período personalizado ativo
     fila: ["todas"],   // seleção PENDENTE. ARRAY = filas (multi, somadas); STRING = tag:/orig:/eu
@@ -1923,14 +1929,18 @@
   }
   // Volta tudo ao estado inicial: segmento = todas as filas, período = "Hoje" e datas
   // personalizadas limpas. Aplica na hora (é um reset — não faz sentido ficar pendente).
+  // Período padrão (PRESET_PADRAO) sem datas personalizadas, com a aba certa marcada.
+  function voltarPeriodoPadrao() {
+    estado.range = null;
+    estado.preset = PRESET_PADRAO;
+    document.querySelectorAll("#periodoTabs .tab").forEach((x) =>
+      x.classList.toggle("active", x.dataset.preset === PRESET_PADRAO));
+  }
   function limparSeg() {
     if (!estado.dados) return;
     estado.fila = ["todas"];
     estado.filaAplicada = ["todas"];
-    estado.range = null;              // descarta período personalizado
-    estado.preset = "hoje";
-    document.querySelectorAll("#periodoTabs .tab").forEach((x) =>
-      x.classList.toggle("active", x.dataset.preset === "hoje"));
+    voltarPeriodoPadrao();
     MULTI_DIMS.forEach(fecharMulti);
     atualizarSeletores();
     marcarSegPendente();
@@ -2428,6 +2438,7 @@
     estado.dados = null;
     estado.perfil = null;
     try { localStorage.removeItem(CACHE_KEY); } catch (e) {}   // não vaza dado entre logins no mesmo PC
+    voltarPeriodoPadrao();   // próximo login abre em "Ontem", não no período deixado por quem saiu
     mostrarLogin(true);
   }
 
