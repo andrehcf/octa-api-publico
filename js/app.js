@@ -780,6 +780,7 @@
 
   async function renderTickets() {
     if (!estado.dados) return;
+    if (ehAnalista()) return;   // Tickets é só-gestão: nem renderiza, nem consulta o banco
     const p = estado.tktPeriodoAplicado || periodo();
     if (!p) return;
     const meuSeq = ++tktReqSeq;
@@ -900,6 +901,9 @@
   // Popula os dropdowns de filtro de tickets (formulários/analistas via RPC; status fixo).
   const TKT_STATUS = ["Novo", "Em andamento", "Pendente", "Resolvido", "Cancelado"];
   async function popularTktFiltros() {
+    // Só-gestão. Sem esta guarda o analista dispararia tickets_opcoes() em TODO login —
+    // era o maior gerador de sort em disco do app (ver o comentário em carregar()).
+    if (ehAnalista()) return;
     const painel = $("tktFormMultiPanel");
     if (painel && !painel.querySelector(".multi-opt")) painel.innerHTML = `<div class="multi-nota">Carregando…</div>`;
     let ops;
@@ -2020,7 +2024,9 @@
       if (ehAnalista()) {
         estado.dados = await API.carregarTudoAnalista();   // RLS escopa ao próprio analista
         reconstruirSegmentos();
-        popularTktFiltros();   // formulários/status; o dropdown de analista fica escondido
+        // Analista NÃO chama popularTktFiltros: Tickets é só-gestão. Isto valia IO de verdade —
+        // tickets_opcoes() ordena a fato inteira e, com 43 analistas para 5 gestores, ~90% das
+        // chamadas vinham de quem nunca abre a aba.
       } else {
         estado.dados = await API.carregarCore();   // só o essencial da Performance; resto sob demanda
         reconstruirSegmentos();
@@ -2039,7 +2045,7 @@
         // Supabase lento/fora → exibe o último dado salvo em vez de tela em branco.
         estado.dados = cache.dados;
         reconstruirSegmentos();
-        popularTktFiltros();   // popula os filtros de ticket também no fallback (best-effort)
+        popularTktFiltros();   // filtros de ticket no fallback (best-effort; no-op p/ analista)
         render();
         const quando = new Date(cache.ts).toLocaleString("pt-BR",
           { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -2427,14 +2433,22 @@
     await carregar();
   }
 
-  // Ajusta a navegação/UI conforme o papel: analista não vê Reincidência (não se aplica)
-  // e ganha a classe body.modo-analista (esconde dropdown de analista e ranking de tickets).
+  // Seções que o analista não acessa. Bot e Auditoria somem pela classe .analista-hide no
+  // HTML; Reincidência (não se aplica a ele) e Tickets (só-gestão) somem aqui.
+  const SECOES_SO_GESTAO = ["reincidencia", "tickets", "bot", "qa"];
+
+  // Ajusta a navegação/UI conforme o papel: esconde as seções só-gestão e liga a classe
+  // body.modo-analista (esconde dropdown de analista e colunas de equipe).
   function aplicarModoPapel() {
     const analista = ehAnalista();
     document.body.classList.toggle("modo-analista", analista);
-    const navReinc = document.querySelector('.nav-item[data-section="reincidencia"]');
-    if (navReinc) navReinc.style.display = analista ? "none" : "";
-    if (analista && estado.secao === "reincidencia") {
+    ["reincidencia", "tickets"].forEach((sec) => {
+      const nav = document.querySelector(`.nav-item[data-section="${sec}"]`);
+      if (nav) nav.style.display = analista ? "none" : "";
+    });
+    // Rede de segurança: se a seção ativa for só-gestão (F5 numa seção salva, link antigo),
+    // devolve o analista para a Performance antes de qualquer render/consulta.
+    if (analista && SECOES_SO_GESTAO.includes(estado.secao)) {
       estado.secao = "performance";
       document.querySelectorAll(".nav-item").forEach((x) =>
         x.classList.toggle("active", x.dataset.section === "performance"));
