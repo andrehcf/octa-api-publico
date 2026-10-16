@@ -1325,6 +1325,7 @@
     if (!p) {
       ["kpiReincTaxa", "kpiReincContatos", "kpiReincTempo", "kpiReincAmplo"].forEach(vazio);
       $("subReincTaxa").textContent = "";
+      $("subReincContatos").textContent = "";
       $("subReincAmplo").textContent = "";
     } else {
       const taxa = p.total_contatos > 0 ? 100 * p.contatos_reinc / p.total_contatos : null;
@@ -1339,6 +1340,15 @@
 
       $("kpiReincTaxa").textContent = KPIS.fmtPct(taxa);
       $("kpiReincContatos").textContent = KPIS.fmtInt(p.contatos_reinc);
+      // O denominador explícito no card: a taxa é sobre CLIENTES atendidos, não sobre
+      // acionamentos (na semana de 04-10/10 foram 1.513 clientes em 2.704 atendimentos —
+      // 8,00% vs 4,47%). Sem isso a tela já confundiu duas vezes.
+      // `total_pares` só entra quando passa de contatos_reinc, aí significa que alguns
+      // clientes voltaram mais de uma vez pelo mesmo assunto.
+      $("subReincContatos").textContent = p.total_contatos > 0
+        ? `de ${KPIS.fmtInt(p.total_contatos)} clientes que chegaram ao atendimento`
+          + (p.total_pares > p.contatos_reinc ? ` · ${KPIS.fmtInt(p.total_pares)} retornos` : "")
+        : "";
       $("kpiReincTempo").textContent = KPIS.fmtHoras(horasMedia);
       $("kpiReincAmplo").textContent = KPIS.fmtPct(taxaAmpla);
       // "desses" = dos que voltaram (não dos atendidos): os dois percentuais do card têm
