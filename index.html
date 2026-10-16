@@ -732,14 +732,14 @@
   <section class="section" id="sec-reincidencia">
     <div class="kpi-grid cols-4">
       <div class="kpi-card red">
-        <div class="kpi-header"><div class="kpi-icon red">🔁</div><span class="kpi-label">Reincidência (mesmo tema)</span><span class="kpi-info" tabindex="0" data-tip="De cada 100 clientes que chegaram ao atendimento no período, quantos voltaram a procurar o suporte pelo <b>mesmo assunto</b> em até {janela}.<br><br>É o indicador de <b>problema que não foi resolvido de primeira</b>. Quanto menor, melhor.<br><br>Conta <b>clientes, não atendimentos</b> — o mesmo cliente pode ter aberto vários. Por isso o número é menor que o volume da tela de Performance.">i</span></div>
+        <div class="kpi-header"><div class="kpi-icon red">🔁</div><span class="kpi-label">Reincidência (mesmo tema)</span><span class="kpi-info" tabindex="0" data-tip="De cada 100 <b>atendimentos</b> do período, quantos foram seguidos do cliente voltando pelo <b>mesmo assunto</b> em até {janela}.<br><br>É o indicador de <b>problema que não foi resolvido de primeira</b>. Quanto menor, melhor.<br><br>O total de atendimentos aqui é o <b>mesmo número</b> que aparece na tela de Performance.">i</span></div>
         <div class="kpi-value red" id="kpiReincTaxa">—</div>
         <div class="kpi-delta"><span id="subReincTaxa"></span></div>
       </div>
       <div class="kpi-card blue">
-        <div class="kpi-header"><div class="kpi-icon blue">👥</div><span class="kpi-label">Contatos reincidentes</span><span class="kpi-info" tabindex="0" data-tip="Quantos <b>clientes diferentes</b> voltaram pelo mesmo assunto no período.<br><br>Se o mesmo cliente voltou várias vezes, ele conta <b>uma vez só</b> aqui.">i</span></div>
-        <div class="kpi-value blue" id="kpiReincContatos">—</div>
-        <div class="kpi-delta"><span id="subReincContatos"></span></div>
+        <div class="kpi-header"><div class="kpi-icon blue">👥</div><span class="kpi-label">Atendimentos com retorno</span><span class="kpi-info" tabindex="0" data-tip="Quantos <b>atendimentos</b> foram seguidos de um retorno do mesmo cliente, pelo mesmo assunto.<br><br>No rodapé: o total de atendimentos do período e <b>quantos clientes diferentes</b> estão por trás desses retornos. Se os retornos forem muitos e os clientes poucos, são as mesmas pessoas voltando várias vezes.">i</span></div>
+        <div class="kpi-value blue" id="kpiReincRetornos">—</div>
+        <div class="kpi-delta"><span id="subReincRetornos"></span></div>
       </div>
       <div class="kpi-card cyan">
         <div class="kpi-header"><div class="kpi-icon cyan">⏱️</div><span class="kpi-label">Tempo médio até voltar</span><span class="kpi-info" tabindex="0" data-tip="Quanto tempo o cliente levou, em média, para voltar a falar do <b>mesmo assunto</b>.<br><br>Tempo muito curto é sinal de que o problema <b>nem chegou a ser resolvido</b> no primeiro atendimento.">i</span></div>
@@ -747,7 +747,7 @@
         <div class="kpi-delta"></div>
       </div>
       <div class="kpi-card amber">
-        <div class="kpi-header"><div class="kpi-icon amber">↩️</div><span class="kpi-label">Voltou por qualquer motivo</span><span class="kpi-info" tabindex="0" data-tip="De cada 100 clientes que chegaram ao atendimento, quantos voltaram ao suporte em até {janela} — por <b>qualquer</b> assunto, não só o mesmo.<br><br>Serve de comparação. A linha de baixo mostra <b>que fatia desses retornos era o mesmo assunto</b>: essa parte é falha de resolução, o resto é demanda nova.<br><br>Atenção: este % é sobre <b>todos os clientes do período</b>; o da linha de baixo é sobre <b>os que voltaram</b>.">i</span></div>
+        <div class="kpi-header"><div class="kpi-icon amber">↩️</div><span class="kpi-label">Voltou por qualquer motivo</span><span class="kpi-info" tabindex="0" data-tip="De cada 100 <b>atendimentos</b>, quantos foram seguidos de um retorno em até {janela} — por <b>qualquer</b> assunto, não só o mesmo.<br><br>Serve de comparação. A linha de baixo mostra <b>que fatia desses retornos era o mesmo assunto</b>: essa parte é falha de resolução, o resto é demanda nova.<br><br>Atenção: este % é sobre <b>todos os atendimentos</b>; o da linha de baixo é sobre <b>os retornos</b>.">i</span></div>
         <div class="kpi-value amber" id="kpiReincAmplo">—</div>
         <div class="kpi-delta"><span id="subReincAmplo"></span></div>
       </div>
@@ -757,9 +757,9 @@
         <div class="card-header">
           <div>
             <div class="card-title">Evolução Mensal da Reincidência</div>
-            <div class="card-subtitle" id="subReincChart">Clientes que voltaram pelo mesmo tema (% dos contatos do mês)</div>
+            <div class="card-subtitle" id="subReincChart">Atendimentos seguidos de retorno pelo mesmo tema (% dos atendimentos do mês)</div>
           </div>
-          <span class="kpi-info" tabindex="0" data-tip="Histórico <b>mês a mês</b>, para ver se a reincidência está subindo ou caindo ao longo do tempo.<br><br>As barras são a quantidade de clientes que voltaram pelo mesmo assunto; a linha é o percentual deles sobre os atendidos no mês.<br><br>Este gráfico mostra sempre os <b>meses inteiros</b> — ele não muda quando você troca o período lá em cima.">i</span>
+          <span class="kpi-info" tabindex="0" data-tip="Histórico <b>mês a mês</b>, para ver se a reincidência está subindo ou caindo ao longo do tempo.<br><br>As barras são a quantidade de atendimentos que tiveram retorno pelo mesmo assunto; a linha é o percentual deles sobre todos os atendimentos do mês.<br><br>Este gráfico mostra sempre os <b>meses inteiros</b> — ele não muda quando você troca o período lá em cima.">i</span>
         </div>
         <div class="chart-wrap tall"><canvas id="chartReincMes"></canvas></div>
       </div>
@@ -799,11 +799,11 @@
   </div>
 </div>
 
-<script src="js/config.js?v=86"></script>
-<script src="js/kpis.js?v=86"></script>
-<script src="js/cache.js?v=86"></script>
-<script src="js/api.js?v=86"></script>
-<script src="js/app.js?v=86"></script>
+<script src="js/config.js?v=87"></script>
+<script src="js/kpis.js?v=87"></script>
+<script src="js/cache.js?v=87"></script>
+<script src="js/api.js?v=87"></script>
+<script src="js/app.js?v=87"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */

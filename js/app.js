@@ -1323,38 +1323,39 @@
     const vazio = (id) => { const el = $(id); if (el) el.textContent = "—"; };
 
     if (!p) {
-      ["kpiReincTaxa", "kpiReincContatos", "kpiReincTempo", "kpiReincAmplo"].forEach(vazio);
+      ["kpiReincTaxa", "kpiReincRetornos", "kpiReincTempo", "kpiReincAmplo"].forEach(vazio);
       $("subReincTaxa").textContent = "";
-      $("subReincContatos").textContent = "";
+      $("subReincRetornos").textContent = "";
       $("subReincAmplo").textContent = "";
     } else {
-      const taxa = p.total_contatos > 0 ? 100 * p.contatos_reinc / p.total_contatos : null;
+      // Indicador POR ACIONAMENTO: de cada 100 atendimentos, quantos tiveram retorno pelo
+      // mesmo tema. O denominador é o mesmo volume_atendido da Performance (conferido: bate
+      // nos 6 períodos). Cliente distinto vira leitura secundária, no rodapé do 2º card.
+      const taxa = p.total_acionamentos > 0 ? 100 * p.total_pares / p.total_acionamentos : null;
       // Média em HORAS (não dias): o retorno pelo mesmo tema vem em ~12h (mediana 3,8h),
       // e "dias" com 1 decimal mostraria "0,5 dias".
       const horasMedia = p.horas_n > 0 ? p.horas_soma / p.horas_n : null;
-      const taxaAmpla = p.total_contatos > 0 ? 100 * p.contatos_amplo / p.total_contatos : null;
+      const taxaAmpla = p.total_acionamentos > 0 ? 100 * p.pares_amplo / p.total_acionamentos : null;
       const rotulo = ROTULO_PERIODO_REINC[p.periodo] || p.periodo;
       const dias = p.inicio === p.fim
         ? KPIS.fmtDiaCurto(p.inicio)
         : `${KPIS.fmtDiaCurto(p.inicio)}–${KPIS.fmtDiaCurto(p.fim)}`;
 
       $("kpiReincTaxa").textContent = KPIS.fmtPct(taxa);
-      $("kpiReincContatos").textContent = KPIS.fmtInt(p.contatos_reinc);
-      // O denominador explícito no card: a taxa é sobre CLIENTES atendidos, não sobre
-      // acionamentos (na semana de 04-10/10 foram 1.513 clientes em 2.704 atendimentos —
-      // 8,00% vs 4,47%). Sem isso a tela já confundiu duas vezes.
-      // `total_pares` só entra quando passa de contatos_reinc, aí significa que alguns
-      // clientes voltaram mais de uma vez pelo mesmo assunto.
-      $("subReincContatos").textContent = p.total_contatos > 0
-        ? `de ${KPIS.fmtInt(p.total_contatos)} clientes que chegaram ao atendimento`
-          + (p.total_pares > p.contatos_reinc ? ` · ${KPIS.fmtInt(p.total_pares)} retornos` : "")
+      $("kpiReincRetornos").textContent = KPIS.fmtInt(p.total_pares);
+      // Denominador explícito no card (a tela já confundiu duas vezes sem ele) + quantos
+      // CLIENTES distintos estão por trás dos retornos: se os retornos forem muitos e os
+      // clientes poucos, são as mesmas pessoas voltando várias vezes.
+      $("subReincRetornos").textContent = p.total_acionamentos > 0
+        ? `de ${KPIS.fmtInt(p.total_acionamentos)} atendimentos`
+          + (p.contatos_reinc ? ` · ${KPIS.fmtInt(p.contatos_reinc)} clientes` : "")
         : "";
       $("kpiReincTempo").textContent = KPIS.fmtHoras(horasMedia);
       $("kpiReincAmplo").textContent = KPIS.fmtPct(taxaAmpla);
       // "desses" = dos que voltaram (não dos atendidos): os dois percentuais do card têm
       // denominadores diferentes, e escrever "da reincidência" deixava isso ambíguo.
-      $("subReincAmplo").textContent = p.contatos_amplo > 0
-        ? `desses, ${KPIS.fmtInt(p.contatos_reinc)} (${KPIS.fmtPct(100 * p.contatos_reinc / p.contatos_amplo)}) voltaram pelo mesmo assunto`
+      $("subReincAmplo").textContent = p.pares_amplo > 0
+        ? `desses retornos, ${KPIS.fmtInt(p.total_pares)} (${KPIS.fmtPct(100 * p.total_pares / p.pares_amplo)}) foram pelo mesmo assunto`
         : "";
 
       // Avisos honestos: sem dado ainda (o banco de origem é alimentado de madrugada, então
@@ -1374,8 +1375,8 @@
     const subG = $("subReincChart");
     if (subG) {
       const j = janelaReincDias();
-      subG.textContent = "Clientes que voltaram pelo mesmo tema"
-        + (j ? ` em até ${janelaTxt(j)}` : "") + " (% dos contatos do mês)";
+      subG.textContent = "Atendimentos seguidos de retorno pelo mesmo tema"
+        + (j ? ` em até ${janelaTxt(j)}` : "") + " (% dos atendimentos do mês)";
     }
     if (!linhas.length) return;
 
@@ -1384,10 +1385,10 @@
       data: {
         labels: linhas.map((r) => KPIS.fmtMes(r.mes)),
         datasets: [
-          { type: "bar", label: "Contatos reincidentes", data: linhas.map((r) => r.contatos_reinc),
+          { type: "bar", label: "Atendimentos com retorno", data: linhas.map((r) => r.total_pares),
             backgroundColor: "rgba(248,113,113,0.7)", borderRadius: 7, borderSkipped: false, yAxisID: "y1" },
           { type: "line", label: "Taxa %", yAxisID: "y2",
-            data: linhas.map((r) => r.total_contatos > 0 ? 100 * r.contatos_reinc / r.total_contatos : null),
+            data: linhas.map((r) => r.total_acionamentos > 0 ? 100 * r.total_pares / r.total_acionamentos : null),
             borderColor: "#fbbf24", tension: 0.4, pointRadius: 3 },
         ],
       },
