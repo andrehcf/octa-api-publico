@@ -732,7 +732,7 @@
   <section class="section" id="sec-reincidencia">
     <div class="kpi-grid cols-4">
       <div class="kpi-card red">
-        <div class="kpi-header"><div class="kpi-icon red">🔁</div><span class="kpi-label">Taxa de reincidência</span></div>
+        <div class="kpi-header"><div class="kpi-icon red">🔁</div><span class="kpi-label">Reincidência (mesmo tema)</span></div>
         <div class="kpi-value red" id="kpiReincTaxa">—</div>
         <div class="kpi-delta"><span id="subReincTaxa"></span></div>
       </div>
@@ -747,9 +747,9 @@
         <div class="kpi-delta"></div>
       </div>
       <div class="kpi-card amber">
-        <div class="kpi-header"><div class="kpi-icon amber">🏷️</div><span class="kpi-label">Mesma categoria</span></div>
-        <div class="kpi-value amber" id="kpiReincMesmaCat">—</div>
-        <div class="kpi-delta"></div>
+        <div class="kpi-header"><div class="kpi-icon amber">↩️</div><span class="kpi-label">Voltou por qualquer motivo</span></div>
+        <div class="kpi-value amber" id="kpiReincAmplo">—</div>
+        <div class="kpi-delta"><span id="subReincAmplo"></span></div>
       </div>
     </div>
     <div class="chart-grid full">
@@ -757,7 +757,7 @@
         <div class="card-header">
           <div>
             <div class="card-title">Evolução Mensal da Reincidência</div>
-            <div class="card-subtitle">Clientes que voltaram em até 7 dias (% dos contatos do mês)</div>
+            <div class="card-subtitle" id="subReincChart">Clientes que voltaram pelo mesmo tema (% dos contatos do mês)</div>
           </div>
         </div>
         <div class="chart-wrap tall"><canvas id="chartReincMes"></canvas></div>
@@ -798,11 +798,11 @@
   </div>
 </div>
 
-<script src="js/config.js?v=82"></script>
-<script src="js/kpis.js?v=82"></script>
-<script src="js/cache.js?v=82"></script>
-<script src="js/api.js?v=82"></script>
-<script src="js/app.js?v=82"></script>
+<script src="js/config.js?v=83"></script>
+<script src="js/kpis.js?v=83"></script>
+<script src="js/cache.js?v=83"></script>
+<script src="js/api.js?v=83"></script>
+<script src="js/app.js?v=83"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */

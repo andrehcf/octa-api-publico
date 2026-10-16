@@ -1288,21 +1288,42 @@
   }
 
   // ══════════════ REINCIDÊNCIA ══════════════
+  // Reincidência = mesmo cliente + MESMO TEMA (tabulação do chat) dentro da janela: mede
+  // "voltou porque não resolveram", não "voltou". O KPI âmbar guarda a definição AMPLA
+  // (qualquer motivo) só como contraste — ~26-28% da reincidência ampla é o mesmo tema.
+
+  // A janela vem do DADO (coluna janela_dias), nunca de texto fixo na tela: trocar
+  // REINC_JANELA_DIAS no .env + rodar o sync reajusta os 3 textos sozinho.
+  const janelaTxt = (j) => `${j} ${j === 1 ? "dia" : "dias"}`;
+  const janelaReincDias = () => {
+    const l = (estado.dados && estado.dados.reincMes) || [];
+    return l.length ? l[l.length - 1].janela_dias : null;
+  };
 
   function renderReincidencia() {
     const linhas = estado.dados.reincMes;
     if (!linhas.length) return;
     const ult = linhas[linhas.length - 1];
     const taxa = ult.total_contatos > 0 ? 100 * ult.contatos_reinc / ult.total_contatos : null;
-    const tempoDias = ult.horas_n > 0 ? ult.horas_soma / ult.horas_n / 24 : null;
-    const mesmaCat = ult.com_categoria > 0 ? 100 * ult.mesma_categoria / ult.com_categoria : null;
+    // Média em HORAS (não dias): com a janela de 2 dias o retorno pelo mesmo tema vem em
+    // ~12h, e "dias" com 1 decimal mostraria "0,5 dias".
+    const horasMedia = ult.horas_n > 0 ? ult.horas_soma / ult.horas_n : null;
+    const taxaAmpla = ult.total_contatos > 0 ? 100 * ult.contatos_amplo / ult.total_contatos : null;
 
     $("kpiReincTaxa").textContent = KPIS.fmtPct(taxa);
-    $("subReincTaxa").textContent = `${KPIS.fmtMes(ult.mes)} — janela de ${ult.janela_dias} dias`;
+    $("subReincTaxa").textContent =
+      `${KPIS.fmtMes(ult.mes)} — mesmo tema, janela de ${janelaTxt(ult.janela_dias)}`;
     $("kpiReincContatos").textContent = KPIS.fmtInt(ult.contatos_reinc);
-    $("kpiReincTempo").textContent = tempoDias !== null
-      ? tempoDias.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " dias" : "—";
-    $("kpiReincMesmaCat").textContent = KPIS.fmtPct(mesmaCat);
+    $("kpiReincTempo").textContent = KPIS.fmtHoras(horasMedia);
+    $("kpiReincAmplo").textContent = KPIS.fmtPct(taxaAmpla);
+    $("subReincAmplo").textContent = ult.contatos_amplo > 0
+      ? `mesmo tema = ${KPIS.fmtPct(100 * ult.contatos_reinc / ult.contatos_amplo)} da reincidência`
+      : "";
+    const subG = $("subReincChart");
+    if (subG) {
+      subG.textContent = `Clientes que voltaram pelo mesmo tema em até `
+        + `${janelaTxt(ult.janela_dias)} (% dos contatos do mês)`;
+    }
 
     novoChart("chartReincMes", {
       type: "bar",
@@ -1711,7 +1732,8 @@
     tickets: ["Tickets", "Fluxo, formulários e status"],
     categorias: ["Por Categoria", "Volume, TMA e CSAT por categoria de atendimento"],
     ranking: ["Ranking de Analistas", "Score ponderado — filtre por data"],
-    reincidencia: ["Reincidência", "Clientes que retornaram em até 7 dias"],
+    // Subtítulo sem número: render() sobrescreve com a janela que vier do dado.
+    reincidencia: ["Reincidência", "Clientes que voltaram pelo mesmo tema sem terem sido resolvidos"],
     qa: ["Auditoria de Qualidade", "Avaliação por IA dos atendimentos — visível só para a gestão"],
   };
 
@@ -1719,7 +1741,12 @@
     if (!estado.dados) return;
     garantirChavesSecao();   // rede de segurança: seção sem lazy-load ainda → [] em vez de quebrar
     aplicarTemaCharts();   // GRID/texto dos gráficos acompanham o tema atual (claro/escuro)
-    const [t, s] = TITULOS[estado.secao];
+    let [t, s] = TITULOS[estado.secao];
+    // Reincidência: a janela vem do dado, não de texto fixo (ver janelaReincDias).
+    if (estado.secao === "reincidencia") {
+      const j = janelaReincDias();
+      if (j) s = `Clientes que voltaram pelo mesmo tema em até ${janelaTxt(j)}`;
+    }
     $("pageTitle").textContent = t;
     // Analista: personaliza o subtítulo com o nome (mesmos gráficos, dados só dele).
     const nome = estado.perfil && estado.perfil.agent_name;
