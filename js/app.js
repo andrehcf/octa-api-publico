@@ -1341,8 +1341,10 @@
       $("kpiReincContatos").textContent = KPIS.fmtInt(p.contatos_reinc);
       $("kpiReincTempo").textContent = KPIS.fmtHoras(horasMedia);
       $("kpiReincAmplo").textContent = KPIS.fmtPct(taxaAmpla);
+      // "desses" = dos que voltaram (não dos atendidos): os dois percentuais do card têm
+      // denominadores diferentes, e escrever "da reincidência" deixava isso ambíguo.
       $("subReincAmplo").textContent = p.contatos_amplo > 0
-        ? `mesmo tema = ${KPIS.fmtPct(100 * p.contatos_reinc / p.contatos_amplo)} da reincidência`
+        ? `desses, ${KPIS.fmtInt(p.contatos_reinc)} (${KPIS.fmtPct(100 * p.contatos_reinc / p.contatos_amplo)}) voltaram pelo mesmo assunto`
         : "";
 
       // Avisos honestos: sem dado ainda (o banco de origem é alimentado de madrugada, então
@@ -2147,7 +2149,11 @@
     let tip = null;
     const mostrar = (el) => {
       if (!tip) { tip = document.createElement("div"); tip.className = "kpi-tip"; document.body.appendChild(tip); }
-      tip.innerHTML = el.dataset.tip || "";
+      // {janela} no data-tip vira a janela de reincidência que veio do DADO — mesmo motivo
+      // dos textos da seção: a janela é configurável (REINC_JANELA_DIAS), então número
+      // cravado na explicação mentiria no primeiro ajuste. Nos outros tips é no-op.
+      const j = janelaReincDias();
+      tip.innerHTML = (el.dataset.tip || "").replace(/\{janela\}/g, j ? janelaTxt(j) : "alguns dias");
       tip.classList.add("show");
       const r = el.getBoundingClientRect(), t = tip.getBoundingClientRect();
       let left = r.left + r.width / 2 - t.width / 2;
