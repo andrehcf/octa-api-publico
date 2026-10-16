@@ -771,12 +771,12 @@
             <div class="card-title">Top 10 assuntos reincidentes</div>
             <div class="card-subtitle" id="subReincTema">Assuntos que mais trouxeram o cliente de volta</div>
           </div>
-          <span class="kpi-info" tabindex="0" data-tip="Os assuntos (tabulação do atendimento) que mais trouxeram o cliente de volta no período e nas filas selecionadas.<br><br><b>Retornos</b> = quantos atendimentos daquele assunto tiveram o cliente voltando pelo mesmo assunto.<br><b>% que voltou</b> = esses retornos sobre o total de atendimentos do assunto.<br><br>Olhe a <b>coluna de %</b>, não só a de retornos: assunto de volume grande aparece no topo naturalmente. Um assunto com poucos atendimentos e % alto é um problema que quase nunca se resolve de primeira.">i</span>
+          <span class="kpi-info" tabindex="0" data-tip="Os assuntos (tabulação do atendimento) que mais trouxeram o cliente de volta no período e nas filas selecionadas.<br><br><b>Atendimentos</b> = quantos atendimentos daquele assunto houve no recorte.<br><b>Com retorno</b> = quantos <b>desses</b> foram seguidos do cliente voltando pelo mesmo assunto. Conta o atendimento de <b>ida</b> (o que não resolveu), por isso nunca passa do total.<br><b>% que voltou</b> = com retorno ÷ atendimentos.<br><br>Olhe a <b>coluna de %</b>, não só a contagem: assunto de volume grande aparece no topo naturalmente. Um assunto com poucos atendimentos e % alto é um problema que quase nunca se resolve de primeira.">i</span>
         </div>
         <div class="table-wrap"><table class="data">
           <thead><tr>
             <th>#</th><th>Assunto</th>
-            <th class="num">Retornos</th><th class="num">Atendimentos</th>
+            <th class="num">Atendimentos</th><th class="num">Com retorno</th>
             <th class="num">% que voltou</th><th class="num">Tempo médio</th>
           </tr></thead>
           <tbody id="tabelaReincTema"></tbody>
@@ -818,11 +818,11 @@
   </div>
 </div>
 
-<script src="js/config.js?v=88"></script>
-<script src="js/kpis.js?v=88"></script>
-<script src="js/cache.js?v=88"></script>
-<script src="js/api.js?v=88"></script>
-<script src="js/app.js?v=88"></script>
+<script src="js/config.js?v=89"></script>
+<script src="js/kpis.js?v=89"></script>
+<script src="js/cache.js?v=89"></script>
+<script src="js/api.js?v=89"></script>
+<script src="js/app.js?v=89"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */

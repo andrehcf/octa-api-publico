@@ -1373,7 +1373,7 @@
     const top = [...porCat.entries()].sort((x, y) => y[1].pares - x[1].pares).slice(0, 10);
     if (sub) {
       sub.textContent = top.length
-        ? `${porCat.size} assunto${porCat.size === 1 ? "" : "s"} com retorno no período — mostrando os 10 maiores`
+        ? `${porCat.size} assunto${porCat.size === 1 ? "" : "s"} com retorno no período — os 10 com mais retornos`
         : "Assuntos que mais trouxeram o cliente de volta";
     }
     // esc() obrigatório: categoria_nome vem do Octadesk (texto de fora). O \s+ normaliza as
@@ -1382,8 +1382,8 @@
       <tr>
         <td><span class="pos-badge ${i < 3 ? "top" + (i + 1) : ""}">${i + 1}</span></td>
         <td>${esc(String(nome).replace(/\s+/g, " "))}</td>
-        <td class="num">${KPIS.fmtInt(c.pares)}</td>
         <td class="num">${KPIS.fmtInt(c.acion)}</td>
+        <td class="num">${KPIS.fmtInt(c.pares)}</td>
         <td class="num">${c.acion ? KPIS.fmtPct(100 * c.pares / c.acion) : "—"}</td>
         <td class="num">${c.hn ? KPIS.fmtHoras(c.hs / c.hn) : "—"}</td>
       </tr>`).join("")
