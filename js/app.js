@@ -1305,16 +1305,89 @@
     "semana-passada": "Semana passada", mes: "Esse mês", "mes-passado": "Mês passado",
   };
 
-  // Qual linha de agg_reincidencia_periodo corresponde ao filtro do topo.
-  // Os KPIs seguem o período selecionado; o GRÁFICO continua sendo a série mensal (histórico).
+  // Período e filas aplicados nesta seção. O GRÁFICO continua sendo a série mensal global.
   // Contato distinto não é aditivo, então não dá para montar um período arbitrário somando
   // linhas no cliente — por isso só existem os 6 períodos canônicos dos pills, calculados
   // inteiros no sync. Range personalizado não tem linha: cai em "Esse mês".
+  const periodoReinc = () => (estado.range ? "mes" : estado.preset);
+
+  // Filas aplicadas → fila_slug de agg_reincidencia_*. O sync publica já AGRUPADO (base +
+  // plantão), com o mesmo slug que o dropdown usa, então é correspondência direta — sem
+  // membrosDaFila. Seleção de tag/origem não existe nesta seção: cai em "todas".
+  function filasReinc() {
+    if (dimSel() !== "fila") return ["todas"];
+    const arr = Array.isArray(estado.filaAplicada) ? estado.filaAplicada : [estado.filaAplicada];
+    const filas = arr.filter((s) => s && s !== "todas");
+    return filas.length ? filas : ["todas"];
+  }
+
+  // Soma as linhas das filas marcadas. Acionamentos, pares e horas são ADITIVOS (o par é
+  // atribuído à fila do chat1, então cada par cai em exatamente uma fila — conferido: a soma
+  // das 6 filas bate com a linha "todas" nos 6 períodos). Já contatos_reinc/total_contatos
+  // são DISTINCT e NÃO somam, por isso `exato` só é true quando há UMA linha: aí a tela
+  // mostra o número de clientes; com 2+ filas marcadas, omite em vez de mentir.
   function linhaPeriodoReinc() {
     const rows = (estado.dados && estado.dados.reincPeriodo) || [];
-    const slug = estado.range ? "mes" : estado.preset;
-    return rows.find((r) => r.periodo === slug)
-        || rows.find((r) => r.periodo === "mes") || null;
+    let slug = periodoReinc();
+    let sel = rows.filter((r) => r.periodo === slug && filasReinc().includes(r.fila_slug));
+    if (!sel.length) {                                  // período sem linha → cai no mês
+      slug = "mes";
+      sel = rows.filter((r) => r.periodo === slug && filasReinc().includes(r.fila_slug));
+    }
+    if (!sel.length) return null;
+    const a = { periodo: slug, inicio: sel[0].inicio, fim: sel[0].fim,
+                janela_dias: sel[0].janela_dias, aberto: sel[0].aberto,
+                exato: sel.length === 1,
+                total_acionamentos: 0, total_contatos: 0, total_pares: 0,
+                contatos_reinc: 0, horas_soma: 0, horas_n: 0, pares_amplo: 0 };
+    for (const r of sel) {
+      a.total_acionamentos += r.total_acionamentos || 0;
+      a.total_contatos += r.total_contatos || 0;
+      a.total_pares += r.total_pares || 0;
+      a.contatos_reinc += r.contatos_reinc || 0;
+      a.horas_soma += r.horas_soma || 0;
+      a.horas_n += r.horas_n || 0;
+      a.pares_amplo += r.pares_amplo || 0;
+    }
+    return a;
+  }
+
+  // Top 10 assuntos: soma as filas marcadas por categoria e ordena por retornos.
+  // Guardar TODOS os assuntos com retorno (em vez de um top-N por fila) é o que permite
+  // somar filas sem quebrar o ranking.
+  function renderReincTema(p) {
+    const corpo = $("tabelaReincTema");
+    if (!corpo) return;
+    const sub = $("subReincTema");
+    const filas = filasReinc();
+    const rows = ((estado.dados && estado.dados.reincTema) || [])
+      .filter((r) => r.periodo === (p ? p.periodo : periodoReinc()) && filas.includes(r.fila_slug));
+    const porCat = new Map();
+    for (const r of rows) {
+      const k = r.categoria_nome;
+      const c = porCat.get(k) || { pares: 0, acion: 0, hs: 0, hn: 0 };
+      c.pares += r.pares || 0; c.acion += r.acionamentos || 0;
+      c.hs += r.horas_soma || 0; c.hn += r.horas_n || 0;
+      porCat.set(k, c);
+    }
+    const top = [...porCat.entries()].sort((x, y) => y[1].pares - x[1].pares).slice(0, 10);
+    if (sub) {
+      sub.textContent = top.length
+        ? `${porCat.size} assunto${porCat.size === 1 ? "" : "s"} com retorno no período — mostrando os 10 maiores`
+        : "Assuntos que mais trouxeram o cliente de volta";
+    }
+    // esc() obrigatório: categoria_nome vem do Octadesk (texto de fora). O \s+ normaliza as
+    // TABULAÇÕES que algumas tabulações trazem no meio do nome ("NF-e (Produto)	Rejeição").
+    corpo.innerHTML = top.map(([nome, c], i) => `
+      <tr>
+        <td><span class="pos-badge ${i < 3 ? "top" + (i + 1) : ""}">${i + 1}</span></td>
+        <td>${esc(String(nome).replace(/\s+/g, " "))}</td>
+        <td class="num">${KPIS.fmtInt(c.pares)}</td>
+        <td class="num">${KPIS.fmtInt(c.acion)}</td>
+        <td class="num">${c.acion ? KPIS.fmtPct(100 * c.pares / c.acion) : "—"}</td>
+        <td class="num">${c.hn ? KPIS.fmtHoras(c.hs / c.hn) : "—"}</td>
+      </tr>`).join("")
+      || `<tr><td colspan="6" class="empty-note">Nenhum retorno pelo mesmo assunto no período.</td></tr>`;
   }
 
   function renderReincidencia() {
@@ -1346,9 +1419,10 @@
       // Denominador explícito no card (a tela já confundiu duas vezes sem ele) + quantos
       // CLIENTES distintos estão por trás dos retornos: se os retornos forem muitos e os
       // clientes poucos, são as mesmas pessoas voltando várias vezes.
+      // Clientes só quando a seleção é UMA linha ("todas" ou uma fila): distinct não soma.
       $("subReincRetornos").textContent = p.total_acionamentos > 0
         ? `de ${KPIS.fmtInt(p.total_acionamentos)} atendimentos`
-          + (p.contatos_reinc ? ` · ${KPIS.fmtInt(p.contatos_reinc)} clientes` : "")
+          + (p.exato && p.contatos_reinc ? ` · ${KPIS.fmtInt(p.contatos_reinc)} clientes` : "")
         : "";
       $("kpiReincTempo").textContent = KPIS.fmtHoras(horasMedia);
       $("kpiReincAmplo").textContent = KPIS.fmtPct(taxaAmpla);
@@ -1363,14 +1437,18 @@
       let nota = "";
       if (p.total_contatos === 0) nota = " · sem atendimento no período ainda";
       else if (p.aberto) nota = ` · ⏳ janela de ${janelaTxt(p.janela_dias)} ainda aberta — o número ainda sobe`;
+      const filas = filasReinc();
+      const filaTxt = filas.includes("todas") ? "" : ` · ${filaLabel(filas)}`;
       $("subReincTaxa").textContent =
-        `${rotulo} (${dias}) — mesmo tema, janela de ${janelaTxt(p.janela_dias)}${nota}`;
+        `${rotulo} (${dias})${filaTxt} — mesmo tema, janela de ${janelaTxt(p.janela_dias)}${nota}`;
 
       if (estado.range) {
         $("subReincTaxa").textContent +=
           " · período personalizado não se aplica aqui, mostrando o mês";
       }
     }
+
+    renderReincTema(p);
 
     const subG = $("subReincChart");
     if (subG) {
@@ -1808,13 +1886,20 @@
     $("pageSubtitle").textContent = ehAnalista() ? `Meus indicadores${nome ? " — " + nome : ""}` : s;
     // Filtros de fila/tag/origem: só na Performance E só para a gestão (o analista vê o
     // total dele em todas as filas — não escolhe segmento).
-    { const vis = (!ehAnalista() && estado.secao === "performance") ? "visible" : "hidden";
-      $("filaMulti").style.visibility = vis;
-      $("tagMulti").style.visibility = vis;
-      $("origemMulti").style.visibility = vis;
-      $("segAplicar").style.visibility = vis;   // "Aplicar" e "Limpar" acompanham os seletores
-      $("segLimpar").style.visibility = vis;
-      if (vis === "hidden") MULTI_DIMS.forEach(fecharMulti); }
+    // Reincidência também recorta por FILA (agg_reincidencia_periodo/_tema têm fila_slug),
+    // mas NÃO por tag/origem — esses segmentos não são publicados para esta seção.
+    { const gestao = !ehAnalista();
+      const perf = gestao && estado.secao === "performance";
+      const reinc = gestao && estado.secao === "reincidencia";
+      const visFila = (perf || reinc) ? "visible" : "hidden";
+      const visOutros = perf ? "visible" : "hidden";
+      $("filaMulti").style.visibility = visFila;
+      $("tagMulti").style.visibility = visOutros;
+      $("origemMulti").style.visibility = visOutros;
+      $("segAplicar").style.visibility = visFila;   // "Aplicar" e "Limpar" acompanham os seletores
+      $("segLimpar").style.visibility = visFila;
+      if (visFila === "hidden") fecharMulti(MULTI_DIMS[0]);
+      if (visOutros === "hidden") MULTI_DIMS.slice(1).forEach(fecharMulti); }
     // Reincidência: os PILLS funcionam (há uma linha pronta por período canônico), mas o range
     // personalizado não tem linha — contato distinto não é aditivo, então não dá para montar
     // um intervalo arbitrário no cliente. As caixas de data somem para não prometer o que a
@@ -2076,7 +2161,8 @@
     ranking:      [{ key: "agentesDia", nome: "agg_agentes_dia", ordem: "dia,agent_id" },
                    { key: "agentesFilaDia", nome: "agg_agentes_fila_dia", ordem: "dia,agent_id,categoria_slug", fallback: true }],
     reincidencia: [{ key: "reincMes", nome: "agg_reincidencia_mes", ordem: "mes" },
-                   { key: "reincPeriodo", nome: "agg_reincidencia_periodo", fallback: true }],
+                   { key: "reincPeriodo", nome: "agg_reincidencia_periodo", fallback: true },
+                   { key: "reincTema", nome: "agg_reincidencia_tema", fallback: true }],
     bot:          [{ key: "botDia", nome: "agg_bot_dia", ordem: "dia,canal" },
                    { key: "botHora", nome: "agg_bot_hora", ordem: "dia,hora" }],
     qa:           [{ key: "qaResultados", nome: "agg_qa_resultados", ordem: "result_id", fallback: true }],
