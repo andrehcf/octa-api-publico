@@ -1300,30 +1300,72 @@
     return l.length ? l[l.length - 1].janela_dias : null;
   };
 
-  function renderReincidencia() {
-    const linhas = estado.dados.reincMes;
-    if (!linhas.length) return;
-    const ult = linhas[linhas.length - 1];
-    const taxa = ult.total_contatos > 0 ? 100 * ult.contatos_reinc / ult.total_contatos : null;
-    // Média em HORAS (não dias): com a janela de 2 dias o retorno pelo mesmo tema vem em
-    // ~12h, e "dias" com 1 decimal mostraria "0,5 dias".
-    const horasMedia = ult.horas_n > 0 ? ult.horas_soma / ult.horas_n : null;
-    const taxaAmpla = ult.total_contatos > 0 ? 100 * ult.contatos_amplo / ult.total_contatos : null;
+  const ROTULO_PERIODO_REINC = {
+    hoje: "Hoje", ontem: "Ontem", semana: "Essa semana",
+    "semana-passada": "Semana passada", mes: "Esse mês", "mes-passado": "Mês passado",
+  };
 
-    $("kpiReincTaxa").textContent = KPIS.fmtPct(taxa);
-    $("subReincTaxa").textContent =
-      `${KPIS.fmtMes(ult.mes)} — mesmo tema, janela de ${janelaTxt(ult.janela_dias)}`;
-    $("kpiReincContatos").textContent = KPIS.fmtInt(ult.contatos_reinc);
-    $("kpiReincTempo").textContent = KPIS.fmtHoras(horasMedia);
-    $("kpiReincAmplo").textContent = KPIS.fmtPct(taxaAmpla);
-    $("subReincAmplo").textContent = ult.contatos_amplo > 0
-      ? `mesmo tema = ${KPIS.fmtPct(100 * ult.contatos_reinc / ult.contatos_amplo)} da reincidência`
-      : "";
+  // Qual linha de agg_reincidencia_periodo corresponde ao filtro do topo.
+  // Os KPIs seguem o período selecionado; o GRÁFICO continua sendo a série mensal (histórico).
+  // Contato distinto não é aditivo, então não dá para montar um período arbitrário somando
+  // linhas no cliente — por isso só existem os 6 períodos canônicos dos pills, calculados
+  // inteiros no sync. Range personalizado não tem linha: cai em "Esse mês".
+  function linhaPeriodoReinc() {
+    const rows = (estado.dados && estado.dados.reincPeriodo) || [];
+    const slug = estado.range ? "mes" : estado.preset;
+    return rows.find((r) => r.periodo === slug)
+        || rows.find((r) => r.periodo === "mes") || null;
+  }
+
+  function renderReincidencia() {
+    const linhas = estado.dados.reincMes || [];
+    const p = linhaPeriodoReinc();
+    const vazio = (id) => { const el = $(id); if (el) el.textContent = "—"; };
+
+    if (!p) {
+      ["kpiReincTaxa", "kpiReincContatos", "kpiReincTempo", "kpiReincAmplo"].forEach(vazio);
+      $("subReincTaxa").textContent = "";
+      $("subReincAmplo").textContent = "";
+    } else {
+      const taxa = p.total_contatos > 0 ? 100 * p.contatos_reinc / p.total_contatos : null;
+      // Média em HORAS (não dias): o retorno pelo mesmo tema vem em ~12h (mediana 3,8h),
+      // e "dias" com 1 decimal mostraria "0,5 dias".
+      const horasMedia = p.horas_n > 0 ? p.horas_soma / p.horas_n : null;
+      const taxaAmpla = p.total_contatos > 0 ? 100 * p.contatos_amplo / p.total_contatos : null;
+      const rotulo = ROTULO_PERIODO_REINC[p.periodo] || p.periodo;
+      const dias = p.inicio === p.fim
+        ? KPIS.fmtDiaCurto(p.inicio)
+        : `${KPIS.fmtDiaCurto(p.inicio)}–${KPIS.fmtDiaCurto(p.fim)}`;
+
+      $("kpiReincTaxa").textContent = KPIS.fmtPct(taxa);
+      $("kpiReincContatos").textContent = KPIS.fmtInt(p.contatos_reinc);
+      $("kpiReincTempo").textContent = KPIS.fmtHoras(horasMedia);
+      $("kpiReincAmplo").textContent = KPIS.fmtPct(taxaAmpla);
+      $("subReincAmplo").textContent = p.contatos_amplo > 0
+        ? `mesmo tema = ${KPIS.fmtPct(100 * p.contatos_reinc / p.contatos_amplo)} da reincidência`
+        : "";
+
+      // Avisos honestos: sem dado ainda (o banco de origem é alimentado de madrugada, então
+      // "Hoje" costuma vir vazio) e janela ainda correndo na cauda do período (o número sobe).
+      let nota = "";
+      if (p.total_contatos === 0) nota = " · sem atendimento no período ainda";
+      else if (p.aberto) nota = ` · ⏳ janela de ${janelaTxt(p.janela_dias)} ainda aberta — o número ainda sobe`;
+      $("subReincTaxa").textContent =
+        `${rotulo} (${dias}) — mesmo tema, janela de ${janelaTxt(p.janela_dias)}${nota}`;
+
+      if (estado.range) {
+        $("subReincTaxa").textContent +=
+          " · período personalizado não se aplica aqui, mostrando o mês";
+      }
+    }
+
     const subG = $("subReincChart");
     if (subG) {
-      subG.textContent = `Clientes que voltaram pelo mesmo tema em até `
-        + `${janelaTxt(ult.janela_dias)} (% dos contatos do mês)`;
+      const j = janelaReincDias();
+      subG.textContent = "Clientes que voltaram pelo mesmo tema"
+        + (j ? ` em até ${janelaTxt(j)}` : "") + " (% dos contatos do mês)";
     }
+    if (!linhas.length) return;
 
     novoChart("chartReincMes", {
       type: "bar",
@@ -1760,6 +1802,11 @@
       $("segAplicar").style.visibility = vis;   // "Aplicar" e "Limpar" acompanham os seletores
       $("segLimpar").style.visibility = vis;
       if (vis === "hidden") MULTI_DIMS.forEach(fecharMulti); }
+    // Reincidência: os PILLS funcionam (há uma linha pronta por período canônico), mas o range
+    // personalizado não tem linha — contato distinto não é aditivo, então não dá para montar
+    // um intervalo arbitrário no cliente. As caixas de data somem para não prometer o que a
+    // seção não entrega. Ver agg_reincidencia_periodo.
+    $("dateRange").style.visibility = (estado.secao === "reincidencia") ? "hidden" : "visible";
     atualizarControlesData();
     RENDERS[estado.secao]();
     renderStatus();
@@ -2015,7 +2062,8 @@
   const SECAO_TABELAS = {
     ranking:      [{ key: "agentesDia", nome: "agg_agentes_dia", ordem: "dia,agent_id" },
                    { key: "agentesFilaDia", nome: "agg_agentes_fila_dia", ordem: "dia,agent_id,categoria_slug", fallback: true }],
-    reincidencia: [{ key: "reincMes", nome: "agg_reincidencia_mes", ordem: "mes" }],
+    reincidencia: [{ key: "reincMes", nome: "agg_reincidencia_mes", ordem: "mes" },
+                   { key: "reincPeriodo", nome: "agg_reincidencia_periodo", fallback: true }],
     bot:          [{ key: "botDia", nome: "agg_bot_dia", ordem: "dia,canal" },
                    { key: "botHora", nome: "agg_bot_hora", ordem: "dia,hora" }],
     qa:           [{ key: "qaResultados", nome: "agg_qa_resultados", ordem: "result_id", fallback: true }],
