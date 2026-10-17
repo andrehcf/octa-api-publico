@@ -189,7 +189,7 @@ const API = (() => {
   }
 
   // ── Tickets: tudo agregado server-side sob demanda (paridade com octa-api) ──
-  // `f` = { forms:[], status:[], analistas:[], ini, fim, porFechamento }.
+  // `f` = { forms:[], status:[], analistas:[], servicosN2:[], pesos:[], ini, fim, porFechamento }.
   function _rpc(nome, params) {
     return comCache(nome, params, async () => {
       const { data, error } = await comRetry(() => cliente.rpc(nome, params));
@@ -201,8 +201,10 @@ const API = (() => {
     p_forms: f.forms || [], p_status: f.status || [], p_analistas: f.analistas || [],
     p_ini: f.ini, p_fim: f.fim, p_por_fechamento: !!f.porFechamento,
     p_issue: f.issue || "todos",
+    // Campos personalizados do Octadesk (custom_field): Serviço N2 e Peso. Array vazio = todos.
+    p_servicos_n2: f.servicosN2 || [], p_pesos: f.pesos || [],
   });
-  const ticketsOpcoes         = ()  => _rpc("tickets_opcoes", {});                                  // {forms, analistas}
+  const ticketsOpcoes         = ()  => _rpc("tickets_opcoes", {});                // {forms, analistas, servicos_n2, pesos}
   // PAINEL: 1 RPC devolve tudo (kpis+timeseries+por_formulario+por_status+ranking) num JSON —
   // 1 scan da tabela-fato em vez de 6. Substitui as 6 RPCs de tickets no render.
   const ticketsPainel         = (f) => _rpc("tickets_painel", _tktParams(f));

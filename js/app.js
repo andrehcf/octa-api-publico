@@ -29,8 +29,10 @@
     rankingView: "fila",                         // "fila" (2 categorias) | "geral" (todo o Suporte)
     catView: "geral",                            // Por Categoria: "geral" (todas) | "fila" (Est+Conv / Especializado)
     rankingRows: [],                             // analistas agregados do período (p/ re-ordenar/exportar)
-    tkt: { forms: [], statuses: [], analistas: [], issue: "todos", porFechamento: false },  // seleção PENDENTE dos filtros de tickets
-    tktAplicado: { forms: [], statuses: [], analistas: [], issue: "todos", porFechamento: false },  // filtros de fato aplicados (a query usa este)
+    // seleção PENDENTE dos filtros de tickets (servicos/pesos = campos personalizados do Octadesk)
+    tkt: { forms: [], statuses: [], analistas: [], servicos: [], pesos: [], issue: "todos", porFechamento: false },
+    // filtros de fato aplicados (a query usa este)
+    tktAplicado: { forms: [], statuses: [], analistas: [], servicos: [], pesos: [], issue: "todos", porFechamento: false },
     tktPeriodoAplicado: null,                    // {inicio, fim} do último "Aplicar" (período também espera o botão)
     tktExport: { forms: [], ranking: [] },                              // último resultado p/ CSV
   };
@@ -793,11 +795,13 @@
   // não a seleção pendente (estado.tkt) nem o período global vivo.
   const clonarFiltro = (t) => ({
     forms: [...(t.forms || [])], statuses: [...(t.statuses || [])], analistas: [...(t.analistas || [])],
+    servicos: [...(t.servicos || [])], pesos: [...(t.pesos || [])],
     issue: t.issue || "todos", porFechamento: !!t.porFechamento,
   });
   const chaveTkt = (t, per) => JSON.stringify({
     forms: [...(t.forms || [])].sort(), statuses: [...(t.statuses || [])].sort(),
-    analistas: [...(t.analistas || [])].sort(), issue: t.issue || "todos", porFechamento: !!t.porFechamento,
+    analistas: [...(t.analistas || [])].sort(), servicos: [...(t.servicos || [])].sort(),
+    pesos: [...(t.pesos || [])].sort(), issue: t.issue || "todos", porFechamento: !!t.porFechamento,
     ini: per && per.inicio, fim: per && per.fim,
   });
   // Destaca o botão Aplicar quando a seleção pendente (+ período) difere do que está aplicado.
@@ -832,6 +836,8 @@
       forms: t.forms || [],
       status: t.statuses || [],
       analistas: t.analistas || [],
+      servicosN2: t.servicos || [],
+      pesos: t.pesos || [],
       issue: t.issue || "todos",
       ini: p.inicio, fim: p.fim, porFechamento: t.porFechamento,
     };
@@ -979,6 +985,23 @@
     const idsValidos = new Set(analistas.map((a) => String(a.id)));
     estado.tkt.analistas = (estado.tkt.analistas || []).filter((id) => idsValidos.has(id));
     atualizarTktAnalistaMulti();
+    // Serviço N2 e Peso = campos personalizados do Octadesk (custom_field). A RPC só lista os
+    // valores presentes na janela; ticket sem o campo não aparece (NULL não é opção de filtro).
+    popularTktLista("tktServicoMultiPanel", ops.servicos_n2 || [], "servicos",
+      "Sem serviço N2", atualizarTktServicoMulti);
+    popularTktLista("tktPesoMultiPanel", ops.pesos || [], "pesos", "Sem peso", atualizarTktPesoMulti);
+  }
+
+  // Preenche um multi de lista simples (value = rótulo) e descarta do estado o que sumiu.
+  function popularTktLista(panelId, valores, campo, vazio, atualizar) {
+    const painel = $(panelId);
+    if (!painel) return;
+    painel.innerHTML = valores.length
+      ? valores.map((v) => `<label class="multi-opt"><input type="checkbox" value="${esc(v)}"> ${esc(v)}</label>`).join("")
+      : `<div class="multi-nota">${esc(vazio)}</div>`;
+    const validos = new Set(valores);
+    estado.tkt[campo] = (estado.tkt[campo] || []).filter((v) => validos.has(v));
+    atualizar();
   }
 
   // Multi-seletor genérico da aba Tickets (sem exclusividade; vazio = todos). Reflete o array
@@ -1005,6 +1028,12 @@
   const atualizarTktAnalistaMulti = () =>
     atualizarTktMulti("tktAnalistaMultiPanel", "tktAnalistaMultiLabel", "tktAnalistaMultiBtn", estado.tkt.analistas,
       "Todos os analistas", "analistas", (id) => tktAnalistaNomes.get(id) || id);
+  const atualizarTktServicoMulti = () =>
+    atualizarTktMulti("tktServicoMultiPanel", "tktServicoMultiLabel", "tktServicoMultiBtn", estado.tkt.servicos,
+      "Todos os serviços N2", "serviços N2");
+  const atualizarTktPesoMulti = () =>
+    atualizarTktMulti("tktPesoMultiPanel", "tktPesoMultiLabel", "tktPesoMultiBtn", estado.tkt.pesos,
+      "Todos os pesos", "pesos");
 
   function fecharTktMulti(panelId, btnId) {
     const painel = $(panelId);
@@ -2465,12 +2494,14 @@
   $("segAplicar").addEventListener("click", aplicarSeg);
   $("segLimpar").addEventListener("click", limparSeg);
 
-  // ── Filtros de Tickets (formulário/status/analista + toggle abertura/fechamento) ──
-  // Formulário, Status e Analista = múltipla escolha (sem exclusividade): abre/fecha, marca/desmarca (soma).
+  // ── Filtros de Tickets (formulário/status/analista/serviço N2/peso + toggle abertura/fechamento) ──
+  // Todos os cinco = múltipla escolha (sem exclusividade): abre/fecha, marca/desmarca (soma).
   const TKT_MULTI = [
     { id: "tktFormMulti",     btn: "tktFormMultiBtn",     panel: "tktFormMultiPanel",     campo: "forms",     atualizar: atualizarTktFormMulti },
     { id: "tktStatusMulti",   btn: "tktStatusMultiBtn",   panel: "tktStatusMultiPanel",   campo: "statuses",  atualizar: atualizarTktStatusMulti },
     { id: "tktAnalistaMulti", btn: "tktAnalistaMultiBtn", panel: "tktAnalistaMultiPanel", campo: "analistas", atualizar: atualizarTktAnalistaMulti },
+    { id: "tktServicoMulti",  btn: "tktServicoMultiBtn",  panel: "tktServicoMultiPanel",  campo: "servicos",  atualizar: atualizarTktServicoMulti },
+    { id: "tktPesoMulti",     btn: "tktPesoMultiBtn",     panel: "tktPesoMultiPanel",     campo: "pesos",     atualizar: atualizarTktPesoMulti },
   ];
   for (const m of TKT_MULTI) {
     const btn = $(m.btn), painel = $(m.panel);
@@ -2493,7 +2524,7 @@
     });
   }
   document.addEventListener("click", (e) => {
-    if (!e.target.closest("#tktFormMulti,#tktStatusMulti,#tktAnalistaMulti"))
+    if (!e.target.closest("#tktFormMulti,#tktStatusMulti,#tktAnalistaMulti,#tktServicoMulti,#tktPesoMulti"))
       TKT_MULTI.forEach((m) => fecharTktMulti(m.panel, m.btn));
   });
   $("tktIssue").addEventListener("change", (e) => { estado.tkt.issue = e.target.value; marcarTktPendente(); });

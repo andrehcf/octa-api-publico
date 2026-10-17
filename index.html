@@ -8,7 +8,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://dholqliulwtnrsjgxjqp.supabase.co https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="no-referrer">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=69">
+<link rel="stylesheet" href="css/style.css?v=70">
 <script>
   /* Anti-flash: aplica o tema salvo (ou o do sistema no 1º acesso) antes do render */
   (function () {
@@ -426,6 +426,20 @@
         </button>
         <div class="multi-panel" id="tktAnalistaMultiPanel" role="group" aria-label="Analistas" hidden></div>
       </div>
+      <div class="select-fila multi" id="tktServicoMulti" title="Serviço N2 — selecione um ou mais (os indicadores somam)">
+        <button type="button" class="multi-btn" id="tktServicoMultiBtn" aria-haspopup="true" aria-expanded="false">
+          <span id="tktServicoMultiLabel">Todos os serviços N2</span>
+          <span class="multi-caret" aria-hidden="true">▾</span>
+        </button>
+        <div class="multi-panel" id="tktServicoMultiPanel" role="group" aria-label="Serviço N2" hidden></div>
+      </div>
+      <div class="select-fila multi" id="tktPesoMulti" title="Peso — selecione um ou mais (os indicadores somam)">
+        <button type="button" class="multi-btn" id="tktPesoMultiBtn" aria-haspopup="true" aria-expanded="false">
+          <span id="tktPesoMultiLabel">Todos os pesos</span>
+          <span class="multi-caret" aria-hidden="true">▾</span>
+        </button>
+        <div class="multi-panel" id="tktPesoMultiPanel" role="group" aria-label="Peso" hidden></div>
+      </div>
       <select class="select-fila" id="tktIssue" title="Issue/bug vinculado (GitLab)">
         <option value="todos">Com e sem issue</option>
         <option value="com">Só com issue</option>
@@ -822,11 +836,11 @@
   </div>
 </div>
 
-<script src="js/config.js?v=93"></script>
-<script src="js/kpis.js?v=93"></script>
-<script src="js/cache.js?v=93"></script>
-<script src="js/api.js?v=93"></script>
-<script src="js/app.js?v=93"></script>
+<script src="js/config.js?v=94"></script>
+<script src="js/kpis.js?v=94"></script>
+<script src="js/cache.js?v=94"></script>
+<script src="js/api.js?v=94"></script>
+<script src="js/app.js?v=94"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */

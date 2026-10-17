@@ -244,7 +244,8 @@ body {
 .multi-panel[hidden] { display: none; }
 /* Formulários (à esquerda da barra de tickets) abrem p/ a DIREITA — senão nomes longos
    jogam o painel pra fora da tela pela esquerda (o de fila fica à direita, mantém right:0). */
-#tktFormMultiPanel, #tktStatusMultiPanel, #tktAnalistaMultiPanel { left: 0; right: auto; }
+#tktFormMultiPanel, #tktStatusMultiPanel, #tktAnalistaMultiPanel,
+#tktServicoMultiPanel, #tktPesoMultiPanel { left: 0; right: auto; }
 .multi-opt {
   display: flex; align-items: center; gap: 8px;
   padding: 7px 8px; border-radius: 7px; font-size: 12px; color: var(--text);
