@@ -1365,15 +1365,18 @@
     const porCat = new Map();
     for (const r of rows) {
       const k = r.categoria_nome;
-      const c = porCat.get(k) || { pares: 0, acion: 0, hs: 0, hn: 0 };
+      const c = porCat.get(k) || { pares: 0, acion: 0, hs: 0, hn: 0, tk: 0 };
       c.pares += r.pares || 0; c.acion += r.acionamentos || 0;
       c.hs += r.horas_soma || 0; c.hn += r.horas_n || 0;
+      c.tk += r.pares_ticket || 0;
       porCat.set(k, c);
     }
     const top = [...porCat.entries()].sort((x, y) => y[1].pares - x[1].pares).slice(0, 10);
+    const totalTk = [...porCat.values()].reduce((a, c) => a + c.tk, 0);
     if (sub) {
       sub.textContent = top.length
         ? `${porCat.size} assunto${porCat.size === 1 ? "" : "s"} com retorno no período — os 10 com mais retornos`
+          + (totalTk ? ` · ${KPIS.fmtInt(totalTk)} retorno${totalTk === 1 ? "" : "s"} viraram ticket` : "")
         : "Assuntos que mais trouxeram o cliente de volta";
     }
     // esc() obrigatório: categoria_nome vem do Octadesk (texto de fora). O \s+ normaliza as
@@ -1384,10 +1387,11 @@
         <td>${esc(String(nome).replace(/\s+/g, " "))}</td>
         <td class="num">${KPIS.fmtInt(c.acion)}</td>
         <td class="num">${KPIS.fmtInt(c.pares)}</td>
+        <td class="num">${KPIS.fmtInt(c.tk)}</td>
         <td class="num">${c.acion ? KPIS.fmtPct(100 * c.pares / c.acion) : "—"}</td>
         <td class="num">${c.hn ? KPIS.fmtHoras(c.hs / c.hn) : "—"}</td>
       </tr>`).join("")
-      || `<tr><td colspan="6" class="empty-note">Nenhum retorno pelo mesmo assunto no período.</td></tr>`;
+      || `<tr><td colspan="7" class="empty-note">Nenhum retorno pelo mesmo assunto no período.</td></tr>`;
   }
 
   function renderReincidencia() {
