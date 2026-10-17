@@ -8,7 +8,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://dholqliulwtnrsjgxjqp.supabase.co https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="no-referrer">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=68">
+<link rel="stylesheet" href="css/style.css?v=69">
 <script>
   /* Anti-flash: aplica o tema salvo (ou o do sistema no 1º acesso) antes do render */
   (function () {
@@ -633,7 +633,7 @@
               <div class="card-subtitle" id="subRankingGeral">—</div>
             </div></div>
             <div class="table-wrap">
-              <table class="data ranking-tabela" id="tabelaRankingGeral">
+              <table class="data ranking-tabela sortable" id="tabelaRankingGeral">
                 <thead><tr>
                   <th>#</th>
                   <th data-col="nome">Analista</th>
@@ -660,7 +660,7 @@
             <div class="card-subtitle" id="subRankingA">—</div>
           </div></div>
           <div class="table-wrap">
-            <table class="data ranking-tabela" id="tabelaRankingA">
+            <table class="data ranking-tabela sortable" id="tabelaRankingA">
               <thead><tr>
                 <th>#</th>
                 <th data-col="nome">Analista</th>
@@ -681,7 +681,7 @@
             <div class="card-subtitle" id="subRankingB">—</div>
           </div></div>
           <div class="table-wrap">
-            <table class="data ranking-tabela" id="tabelaRankingB">
+            <table class="data ranking-tabela sortable" id="tabelaRankingB">
               <thead><tr>
                 <th>#</th>
                 <th data-col="nome">Analista</th>
@@ -771,14 +771,14 @@
             <div class="card-title">Top 10 assuntos reincidentes</div>
             <div class="card-subtitle" id="subReincTema">Assuntos que mais trouxeram o cliente de volta</div>
           </div>
-          <span class="kpi-info" tabindex="0" data-tip="Os assuntos (tabulação do atendimento) que mais trouxeram o cliente de volta no período e nas filas selecionadas.<br><br><b>Atendimentos</b> = quantos atendimentos daquele assunto houve no recorte.<br><b>Com retorno</b> = quantos <b>desses</b> foram seguidos do cliente voltando pelo mesmo assunto. Conta o atendimento de <b>ida</b> (o que não resolveu), por isso nunca passa do total.<br><b>Virou ticket</b> = de quantos desses retornos o atendente abriu um ticket, escalando para outro time (N2, TEF Implementações, Integrações, Back). É vínculo registrado pelo próprio Octadesk, não estimativa.<br><b>% que voltou</b> = com retorno ÷ atendimentos.<br><br>Compare <b>Com retorno</b> e <b>Virou ticket</b> lado a lado: assunto que reincide muito e escala pouco é problema que o N1 fica rodando sem resolver; assunto que escala quase sempre depende de outro time e talvez devesse ir direto.<br><br>Olhe a <b>coluna de %</b>, não só a contagem: assunto de volume grande aparece no topo naturalmente. Um assunto com poucos atendimentos e % alto é um problema que quase nunca se resolve de primeira.">i</span>
+          <span class="kpi-info" tabindex="0" data-tip="Os assuntos (tabulação do atendimento) que mais trouxeram o cliente de volta no período e nas filas selecionadas.<br><br><b>Atendimentos</b> = quantos atendimentos daquele assunto houve no recorte.<br><b>Com retorno</b> = quantos <b>desses</b> foram seguidos do cliente voltando pelo mesmo assunto. Conta o atendimento de <b>ida</b> (o que não resolveu), por isso nunca passa do total.<br><b>Virou ticket</b> = de quantos desses retornos o atendente abriu um ticket, escalando para outro time (N2, TEF Implementações, Integrações, Back). É vínculo registrado pelo próprio Octadesk, não estimativa.<br><b>% que voltou</b> = com retorno ÷ atendimentos.<br><br>Compare <b>Com retorno</b> e <b>Virou ticket</b> lado a lado: assunto que reincide muito e escala pouco é problema que o N1 fica rodando sem resolver; assunto que escala quase sempre depende de outro time e talvez devesse ir direto.<br><br><b>Clique no título de qualquer coluna</b> para reordenar (de novo inverte). Trocar a coluna troca <b>quais</b> 10 assuntos aparecem, não só a ordem.<br>Ao ordenar por <b>% que voltou</b>, olhe a coluna Atendimentos junto: 40% de 5 atendimentos é ruído, não tendência.<br><br>Olhe a <b>coluna de %</b>, não só a contagem: assunto de volume grande aparece no topo naturalmente. Um assunto com poucos atendimentos e % alto é um problema que quase nunca se resolve de primeira.">i</span>
         </div>
-        <div class="table-wrap"><table class="data">
+        <div class="table-wrap"><table class="data sortable" id="tabelaReincTemaTbl">
           <thead><tr>
-            <th>#</th><th>Assunto</th>
-            <th class="num">Atendimentos</th><th class="num">Com retorno</th>
-            <th class="num">Virou ticket</th>
-            <th class="num">% que voltou</th><th class="num">Tempo médio</th>
+            <th>#</th><th data-col="assunto">Assunto</th>
+            <th class="num" data-col="acion">Atendimentos</th><th class="num" data-col="pares">Com retorno</th>
+            <th class="num" data-col="tk">Virou ticket</th>
+            <th class="num" data-col="pct">% que voltou</th><th class="num" data-col="horas">Tempo médio</th>
           </tr></thead>
           <tbody id="tabelaReincTema"></tbody>
         </table></div>
@@ -819,11 +819,11 @@
   </div>
 </div>
 
-<script src="js/config.js?v=90"></script>
-<script src="js/kpis.js?v=90"></script>
-<script src="js/cache.js?v=90"></script>
-<script src="js/api.js?v=90"></script>
-<script src="js/app.js?v=90"></script>
+<script src="js/config.js?v=91"></script>
+<script src="js/kpis.js?v=91"></script>
+<script src="js/cache.js?v=91"></script>
+<script src="js/api.js?v=91"></script>
+<script src="js/app.js?v=91"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */

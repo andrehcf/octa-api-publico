@@ -24,6 +24,7 @@
 
     secao: "performance",
     rankingSort: { col: "score", dir: "desc" },  // ordenação da tabela de ranking (gestão)
+    temaSort: { col: "pares", dir: "desc" },     // ordenação do top de assuntos reincidentes
     rankingView: "fila",                         // "fila" (2 categorias) | "geral" (todo o Suporte)
     catView: "geral",                            // Por Categoria: "geral" (todas) | "fila" (Est+Conv / Especializado)
     rankingRows: [],                             // analistas agregados do período (p/ re-ordenar/exportar)
@@ -1352,7 +1353,32 @@
     return a;
   }
 
-  // Top 10 assuntos: soma as filas marcadas por categoria e ordena por retornos.
+  // Colunas ordenáveis do top de assuntos. `get` recebe [nome, acumulado].
+  const TEMA_COLS = {
+    assunto: { get: ([n]) => n, tipo: "txt", rotulo: "assunto" },
+    acion:   { get: ([, c]) => c.acion, rotulo: "atendimentos" },
+    pares:   { get: ([, c]) => c.pares, rotulo: "retornos" },
+    tk:      { get: ([, c]) => c.tk, rotulo: "tickets" },
+    pct:     { get: ([, c]) => (c.acion ? c.pares / c.acion : null), rotulo: "% que voltou" },
+    horas:   { get: ([, c]) => (c.hn ? c.hs / c.hn : null), rotulo: "tempo médio" },
+  };
+
+  // Mesma mecânica do ranking (ordenarRanking): nulo sempre por último, texto por localeCompare.
+  function ordenarTema(entradas) {
+    const { col, dir } = estado.temaSort;
+    const def = TEMA_COLS[col] || TEMA_COLS.pares;
+    const mul = dir === "asc" ? 1 : -1;
+    return entradas.sort((a, b) => {
+      const va = def.get(a), vb = def.get(b);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (def.tipo === "txt") return mul * String(va).localeCompare(String(vb), "pt-BR");
+      return mul * (va - vb);
+    });
+  }
+
+  // Top 10 assuntos: soma as filas marcadas por categoria e ordena pela coluna escolhida.
   // Guardar TODOS os assuntos com retorno (em vez de um top-N por fila) é o que permite
   // somar filas sem quebrar o ranking.
   function renderReincTema(p) {
@@ -1371,14 +1397,26 @@
       c.tk += r.pares_ticket || 0;
       porCat.set(k, c);
     }
-    const top = [...porCat.entries()].sort((x, y) => y[1].pares - x[1].pares).slice(0, 10);
+    // Ordena ANTES de cortar em 10: trocar a coluna troca QUAIS assuntos aparecem, não só a
+    // ordem deles. É o que dá sentido ao clique — por retornos o topo é TEF/Pinpad; por
+    // "Virou ticket" é Smart POS, que nem estaria na lista.
+    const top = ordenarTema([...porCat.entries()]).slice(0, 10);
     const totalTk = [...porCat.values()].reduce((a, c) => a + c.tk, 0);
     if (sub) {
+      const d = TEMA_COLS[estado.temaSort.col] || TEMA_COLS.pares;
+      const criterio = d.tipo === "txt"
+        ? "os 10 primeiros por assunto"
+        : `os 10 com ${estado.temaSort.dir === "desc" ? "mais" : "menos"} ${d.rotulo}`;
       sub.textContent = top.length
-        ? `${porCat.size} assunto${porCat.size === 1 ? "" : "s"} com retorno no período — os 10 com mais retornos`
+        ? `${porCat.size} assunto${porCat.size === 1 ? "" : "s"} com retorno no período — ${criterio}`
           + (totalTk ? ` · ${KPIS.fmtInt(totalTk)} retorno${totalTk === 1 ? "" : "s"} viraram ticket` : "")
         : "Assuntos que mais trouxeram o cliente de volta";
     }
+    document.querySelectorAll("#tabelaReincTemaTbl thead th[data-col]").forEach((th) => {
+      const ativa = th.dataset.col === estado.temaSort.col;
+      th.classList.toggle("sort-asc", ativa && estado.temaSort.dir === "asc");
+      th.classList.toggle("sort-desc", ativa && estado.temaSort.dir === "desc");
+    });
     // esc() obrigatório: categoria_nome vem do Octadesk (texto de fora). O \s+ normaliza as
     // TABULAÇÕES que algumas tabulações trazem no meio do nome ("NF-e (Produto)	Rejeição").
     corpo.innerHTML = top.map(([nome, c], i) => `
@@ -2447,6 +2485,21 @@
         r.sla_pct != null ? r.sla_pct.toFixed(2) : "",
         (r.media_final != null ? r.media_final.toFixed(2) : ""),
       ]));
+  });
+
+  // ── Top de assuntos reincidentes: ordenar por clique no cabeçalho ──
+  // Coluna nova começa DESCENDENTE (maior primeiro) — é o que se espera de um "top";
+  // só "Assunto" começa A→Z. Clicar de novo inverte.
+  $("tabelaReincTemaTbl").addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-col]");
+    if (!th) return;
+    const col = th.dataset.col;
+    if (estado.temaSort.col === col) {
+      estado.temaSort.dir = estado.temaSort.dir === "asc" ? "desc" : "asc";
+    } else {
+      estado.temaSort = { col, dir: (TEMA_COLS[col] || {}).tipo === "txt" ? "asc" : "desc" };
+    }
+    renderReincTema(linhaPeriodoReinc());
   });
 
   // ── Ranking (gestão): ordenar por clique no cabeçalho (vale pras 2 categorias) + Excel ──

@@ -667,11 +667,15 @@ table.data td.num, table.data th.num { text-align: right; }
 
 /* Ranking: controles do card + cabeçalhos clicáveis (ordenação) */
 .ranking-controls { display: flex; align-items: center; gap: 8px; }
-#tabelaRanking thead th[data-col] { cursor: pointer; user-select: none; }
-#tabelaRanking thead th[data-col]:hover { color: var(--text); }
-#tabelaRanking thead th[data-col]::after { content: "\2195"; opacity: .3; margin-left: 5px; }
-#tabelaRanking thead th.sort-asc::after  { content: "\2191"; opacity: .95; color: var(--accent); }
-#tabelaRanking thead th.sort-desc::after { content: "\2193"; opacity: .95; color: var(--accent); }
+/* Cabecalho clicavel para ordenar: qualquer table.sortable com th[data-col] (ranking da
+   gestao e top de assuntos reincidentes). Antes estava preso a #tabelaRanking, que e a
+   tabela do ANALISTA e nao tem data-col -- o seletor nao casava com nada, e as tabelas da
+   gestao ordenavam sem cursor nem seta. */
+table.sortable thead th[data-col] { cursor: pointer; user-select: none; }
+table.sortable thead th[data-col]:hover { color: var(--text); }
+table.sortable thead th[data-col]::after { content: "\2195"; opacity: .3; margin-left: 5px; }
+table.sortable thead th.sort-asc::after  { content: "\2191"; opacity: .95; color: var(--accent); }
+table.sortable thead th.sort-desc::after { content: "\2193"; opacity: .95; color: var(--accent); }
 
 .pos-badge {
   display: inline-flex;
