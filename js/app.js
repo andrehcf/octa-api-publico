@@ -460,7 +460,11 @@
   };
 
   // membrosOverride: usa filas explícitas (visão "Por fila") em vez do filtro global.
-  async function preencherCategorias(tabelaId, subId, limite, ocultar = false, membrosOverride = null) {
+  // `comTicket`: a coluna "Virou ticket" (atendimentos daquela categoria que geraram ticket,
+  // via v2_chat_tickets). Só as 3 tabelas de "Por Categoria" pedem — o card top-10 da
+  // Performance fica com 5 colunas, senão aperta ao lado dos gráficos.
+  async function preencherCategorias(tabelaId, subId, limite, ocultar = false, membrosOverride = null,
+                                     comTicket = false) {
     const tabela = $(tabelaId);
     if (!tabela) return;
     const p = periodo();
@@ -487,11 +491,12 @@
       return `<tr>
         <td>${esc(c.categoria_nome)}</td>
         <td class="num">${KPIS.fmtInt(c.volume)}</td>
+        ${comTicket ? `<td class="num">${KPIS.fmtInt(c.com_ticket)}</td>` : ""}
         <td class="num">${KPIS.fmtDuracao(tma)}</td>
         <td class="num">${c.csat_respondidos ? KPIS.fmtPct((c.csat_soma_score / c.csat_respondidos) / 5 * 100) : "—"}</td>
         <td class="num">${KPIS.fmtInt(c.csat_respondidos)}</td>
       </tr>`;
-    }).join("") || `<tr><td colspan="5" class="empty-note">Sem dados no período</td></tr>`;
+    }).join("") || `<tr><td colspan="${comTicket ? 6 : 5}" class="empty-note">Sem dados no período</td></tr>`;
   }
 
   function renderCategoriasPerf() {
@@ -1097,10 +1102,10 @@
     const p = periodo();
     if (!p) return;
     if (porFila) {
-      preencherCategorias("tabelaCategoriasEC", "subCategoriasEC", 20, false, FILA_CATEGORIA.est_conv);
-      preencherCategorias("tabelaCategoriasESP", "subCategoriasESP", 20, false, FILA_CATEGORIA.especializado);
+      preencherCategorias("tabelaCategoriasEC", "subCategoriasEC", 20, false, FILA_CATEGORIA.est_conv, true);
+      preencherCategorias("tabelaCategoriasESP", "subCategoriasESP", 20, false, FILA_CATEGORIA.especializado, true);
     } else {
-      preencherCategorias("tabelaCategorias", "subCategorias", 20);
+      preencherCategorias("tabelaCategorias", "subCategorias", 20, false, null, true);
     }
   }
 
