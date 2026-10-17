@@ -8,7 +8,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://dholqliulwtnrsjgxjqp.supabase.co https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="no-referrer">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=70">
+<link rel="stylesheet" href="css/style.css?v=71">
 <script>
   /* Anti-flash: aplica o tema salvo (ou o do sistema no 1º acesso) antes do render */
   (function () {
@@ -515,6 +515,53 @@
       </div>
     </div>
 
+    <!-- Tempo de vida por Peso: duas pernas (vida de quem fechou + idade de quem não fechou) -->
+    <div class="chart-grid full">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Tempo de Vida por Peso
+              <span class="kpi-info" tabindex="0" data-tip="Duas pernas, porque ticket aberto <b>ainda não tem</b> tempo de vida (censura à direita).<br><br><b>Vida dos fechados</b> = abertura → fechamento (<code>tma_seg</code>), mediana e P90, só de quem JÁ fechou.<br><b>Idade da fila aberta</b> = <code>hoje − abertura</code> de quem NÃO fechou, em grão de DIA, congelada na última publicação dos dados.<br><br>Ler só a 1ª perna inverte tudo: o peso que quase não fecha aparece como o mais rápido, porque os poucos fechados dele são os fáceis. Leia a vida mediana <b>sempre ao lado</b> de % fechado e da idade da fila.<br><br>O bloco segue os filtros da barra. Duas combinações apagam uma perna, e o subtítulo avisa: no modo <b>Fechamento</b> a fila aberta sai do recorte; com <b>Status</b> filtrado, % fechado e vida refletem só o status escolhido.<br><br>Peso é campo <b>manual</b> e só existe nos formulários de N2 — nos próprios N2, ~3 de cada 4 tickets estão sem peso, e quem recebe peso tende a ser o caso difícil (sem peso, no MESMO formulário, fecha 96% das vezes em ~2 dias). Esses formulários <b>não têm meta de SLA</b>: a leitura aqui é relativa, não contra alvo.<br><br><b>n</b> pequeno (⚠) faz a mediana pular com 1 ticket. A linha <b>(sem peso)</b> é só referência — mistura formulários que não usam o campo.">i</span>
+            </div>
+            <div class="card-subtitle" id="subTktPeso">Abertura → fechamento de quem fechou · hoje − abertura de quem não fechou</div>
+          </div>
+          <button class="btn-export" id="btnExportTktPeso" title="Exportar CSV">⬇ CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data" id="tabelaTktPeso">
+            <thead><tr>
+              <th>Peso</th><th class="num">Tickets</th><th class="num">Fechados</th><th class="num">% fechado</th>
+              <th class="num">Vida mediana</th><th class="num">Vida P90</th>
+              <th class="num">Em aberto</th><th class="num">Idade mediana</th><th class="num">Mais antigo</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="dist-stats" id="statsTktPeso"></div>
+      </div>
+    </div>
+
+    <div class="chart-grid half">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Vida dos Fechados, por Faixa</div>
+            <div class="card-subtitle">Só quem já fechou — a amostra que existe</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartTktPesoFechados"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Idade da Fila Aberta, por Faixa</div>
+            <div class="card-subtitle">Quem não fechou — o que a mediana não vê</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartTktPesoAbertos"></canvas></div>
+      </div>
+    </div>
+
     <div class="chart-grid two-one">
       <div class="card analista-hide">
         <div class="card-header">
@@ -836,11 +883,11 @@
   </div>
 </div>
 
-<script src="js/config.js?v=94"></script>
-<script src="js/kpis.js?v=94"></script>
-<script src="js/cache.js?v=94"></script>
-<script src="js/api.js?v=94"></script>
-<script src="js/app.js?v=94"></script>
+<script src="js/config.js?v=95"></script>
+<script src="js/kpis.js?v=95"></script>
+<script src="js/cache.js?v=95"></script>
+<script src="js/api.js?v=95"></script>
+<script src="js/app.js?v=95"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */

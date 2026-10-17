@@ -666,6 +666,14 @@ table.data td {
 table.data tr:last-child td { border-bottom: none; }
 table.data td.num, table.data th.num { text-align: right; }
 
+/* Tempo de vida por Peso (aba Tickets) */
+/* Amostra pequena (n < 10): a mediana pula com 1 ticket — marcada com ⚠ na célula. */
+.amostra-baixa { color: var(--warn); }
+/* Linha "(sem peso)": é contexto/referência (mistura formulários), não comparação direta. */
+table.data tr.linha-ref td { color: var(--muted); }
+/* Quadradinho da cor do peso, para casar a tabela com a legenda dos 2 histogramas. */
+.peso-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 7px; }
+
 /* Ranking: controles do card + cabeçalhos clicáveis (ordenação) */
 .ranking-controls { display: flex; align-items: center; gap: 8px; }
 /* Cabecalho clicavel para ordenar: qualquer table.sortable com th[data-col] (ranking da

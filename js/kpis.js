@@ -90,6 +90,17 @@ const KPIS = {
     return `${min}min`;
   },
 
+  // Dias decimais → "12,1d" | "4h30" | "45min". Para VIDA/IDADE de ticket, onde a unidade
+  // natural é o dia: fmtHoras(51,76*24) daria "51d 18h" — ruído num P90 e difícil de comparar
+  // entre linhas. Abaixo de 1 dia delega p/ fmtHoras, que já resolve horas/minutos.
+  fmtDias(d) {
+    if (d === null || d === undefined) return "—";
+    if (d < 1) return this.fmtHoras(d * 24);
+    // Sem casa decimal à toa: a idade dos abertos vem em DIAS inteiros (grão do dado) e
+    // "17,0d" seria ruído; a vida dos fechados é fracionária e mantém a casa ("12,1d").
+    return d.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + "d";
+  },
+
   // "2026-06-15" → "15/06"
   fmtDiaCurto(iso) {
     const [, m, d] = iso.split("-");

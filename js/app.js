@@ -862,7 +862,7 @@
     const forms = painel.por_formulario || [];
     const ranking = painel.ranking_analistas || [];
     const status = painel.por_status || [];
-    estado.tktExport = { forms, ranking };
+    estado.tktExport = { forms, ranking, peso: painel.por_peso || [] };
 
     const setar = (id, v) => { const el = $(id); if (el) el.textContent = v; };
     const setarH = (id, h) => { const el = $(id); if (el) el.innerHTML = h; };
@@ -918,6 +918,9 @@
         }</td>
       </tr>`).join("") || `<tr><td colspan="8" class="empty-note">Sem dados no período</td></tr>`;
 
+    // Tempo de vida por Peso (duas pernas: vida de quem fechou + idade de quem não fechou)
+    renderTktPeso(painel.por_peso, painel.peso_cobertura, t);
+
     // Ranking de analistas
     $("tabelaTktRanking").querySelector("tbody").innerHTML = ranking.map((r) => `
       <tr>
@@ -945,6 +948,120 @@
         plugins: { legend: { position: "right", labels: { boxWidth: 10, font: { size: 11 } } } },
       },
     });
+  }
+
+  // ── Tempo de vida por Peso ──
+  // Peso é campo personalizado do Octadesk (custom_field → agg_tickets_fato.peso). "Vida" tem
+  // DUAS pernas porque ticket aberto ainda não tem tempo de vida (censura à direita): a mediana
+  // dos fechados sozinha inverte a leitura — o peso que quase não fecha vira o "mais rápido".
+  // A ORDEM das faixas é CONTRATO com os jsonb_build_array de tickets_painel
+  // (sync/migration_tkt_vida_peso.sql): mudar aqui exige mudar lá.
+  const FAIXAS_VIDA = ["<1d", "1–3d", "3–7d", "7–15d", "15–30d", "30d+"];
+  // Rampa ORDINAL de 1 hue (peso é ordinal, não categoria solta).
+  const COR_PESO = { "Peso 1": "#ddd6fe", "Peso 2": "#a78bfa", "Peso 3": "#7c3aed" };
+  const PESO_N_MIN = 10;   // abaixo disso a mediana pula com 1 ticket → marca ⚠
+
+  function renderTktPeso(linhas, cob, t) {
+    const tbody = $("tabelaTktPeso") && $("tabelaTktPeso").querySelector("tbody");
+    if (!tbody) return;
+    const int = (x) => KPIS.fmtInt(x || 0);
+    const dias = (x) => KPIS.fmtDias(x);
+    const vazio = (msg) => {
+      tbody.innerHTML = `<tr><td colspan="9" class="empty-note">${esc(msg)}</td></tr>`;
+      // Limpa a linha de cobertura junto: sobrando do render anterior, ela descreveria
+      // um recorte que não está mais na tela.
+      if ($("statsTktPeso")) $("statsTktPeso").textContent = "";
+      const sem = { type: "bar", data: { labels: FAIXAS_VIDA, datasets: [] },
+                    options: opts({ y: { beginAtZero: true } }) };
+      novoChart("chartTktPesoFechados", sem);
+      novoChart("chartTktPesoAbertos", sem);
+    };
+
+    // undefined (≠ []) = resposta guardada por uma versão ANTERIOR do site: os params da RPC
+    // não mudaram, então sem o bump do ?v= o cache serve o JSON velho, sem por_peso.
+    if (linhas === undefined) {
+      vazio("Recarregue a página (Ctrl+F5) — resposta em cache de uma versão anterior.");
+      return;
+    }
+    linhas = linhas || [];
+    const comPeso = linhas.filter((r) => r.peso !== "(sem peso)");
+
+    // O bloco obedece aos filtros da barra; duas combinações zeram uma das pernas — diz qual.
+    const avisos = [];
+    if (t.porFechamento) avisos.push("modo <b>Fechamento</b>: a fila aberta sai do recorte");
+    if ((t.statuses || []).length) avisos.push("filtro de <b>Status</b>: % fechado e vida refletem só o status escolhido");
+    const sub = $("subTktPeso");
+    if (sub) sub.innerHTML = "Abertura → fechamento de quem fechou · hoje − abertura de quem não fechou"
+      + (avisos.length ? ` — ${avisos.join(" · ")}` : "");
+
+    if (!comPeso.length) {
+      vazio("Nenhum ticket com Peso preenchido no recorte");
+      return;
+    }
+
+    tbody.innerHTML = linhas.map((r) => {
+      const poucos = (r.vida_n || 0) < PESO_N_MIN;
+      const med = poucos
+        ? `<span class="amostra-baixa" title="Só ${int(r.vida_n)} fechado(s) com vida medida: mediana instável">${dias(r.vida_med_d)} ⚠</span>`
+        : dias(r.vida_med_d);
+      const ref = r.peso === "(sem peso)"
+        ? ` class="linha-ref" title="Referência — inclui formulários que não usam o campo Peso"` : "";
+      const cor = COR_PESO[r.peso];
+      const marca = cor ? `<span class="peso-swatch" style="background:${cor}"></span>` : "";
+      return `<tr${ref}>
+        <td>${marca}${esc(r.peso)}</td>
+        <td class="num">${int(r.total)}</td>
+        <td class="num">${int(r.fechados)}</td>
+        <td class="num">${KPIS.fmtPct(r.taxa_fech_pct, 1)}</td>
+        <td class="num">${med}</td>
+        <td class="num">${dias(r.vida_p90_d)}</td>
+        <td class="num">${int(r.abertos)}</td>
+        <td class="num">${dias(r.idade_med_d)}</td>
+        <td class="num">${r.idade_max_d != null ? dias(r.idade_max_d) : "—"}</td>
+      </tr>`;
+    }).join("");
+
+    // Cobertura: peso é manual e só existe em alguns formulários — a lista vem do dado.
+    if ($("statsTktPeso")) {
+      if (cob && cob.nos_forms) {
+        const nomes = (cob.forms || []).map(esc).join(" e ");
+        $("statsTktPeso").innerHTML =
+          `Peso preenchido em <b>${int(cob.com_peso)}</b> de <b>${int(cob.nos_forms)}</b> tickets dos formulários `
+          + `que usam o campo (<b>${KPIS.fmtPct(100 * cob.com_peso / cob.nos_forms, 1)}</b>) · `
+          + `${int(cob.total)} tickets no recorte inteiro · campo manual, só em ${nomes}`;
+      } else {
+        $("statsTktPeso").textContent = "";
+      }
+    }
+
+    // Dois gráficos de barras AGRUPADAS (x = faixa, 1 dataset por peso). "(sem peso)" fica FORA:
+    // milhares ao lado de unidades esmagariam a escala — ele vive só na tabela.
+    // 0 → null para o rotuloBarrasGrupo não escrever "0" em cada faixa vazia.
+    const cfg = (campo) => {
+      const o = opts({ y: { beginAtZero: true, grace: "18%" } });
+      o.plugins.legend = { display: true, position: "top",
+        labels: { boxWidth: 12, usePointStyle: true, pointStyle: "rect", color: CHART_TEXT, font: { size: 11 } } };
+      return {
+        type: "bar",
+        data: {
+          labels: FAIXAS_VIDA,
+          datasets: comPeso.map((r) => ({
+            label: r.peso,
+            data: (r[campo] || []).map((v) => Number(v) || null),
+            backgroundColor: COR_PESO[r.peso] || "#a78bfa",
+            borderRadius: 5, borderSkipped: false,
+          })),
+        },
+        options: o,
+        // SEM rotuloBarrasGrupo de propósito: são 18 barras por gráfico (6 faixas × 3 pesos)
+        // num card de meia largura — os valores colidem. O tooltip (mode "index", vindo de
+        // opts) já mostra os 3 pesos da faixa de uma vez.
+      };
+    };
+    novoChart("chartTktPesoFechados", cfg("buckets_fechados"));
+    novoChart("chartTktPesoAbertos", cfg("buckets_abertos"));
+    // Sem delta vs período anterior de propósito: a coorte anterior teve mais tempo para fechar,
+    // então qualquer delta de % fechado ou de vida seria viés de maturação, não melhora/piora.
   }
 
   // Popula os dropdowns de filtro de tickets (formulários/analistas via RPC; status fixo).
@@ -2547,6 +2664,18 @@
         r.alvo_horas != null ? r.alvo_horas : "",
         r.pct_dentro_sla != null ? r.pct_dentro_sla.toFixed(2) : "",
         r.alvo_horas != null ? (r.sla_estourado || 0) : "",
+      ]));
+  });
+  $("btnExportTktPeso").addEventListener("click", () => {
+    const n2 = (v) => (v == null ? "" : Number(v).toFixed(2).replace(".", ","));
+    baixarCSV("tickets_vida_por_peso.csv",
+      ["Peso", "Tickets", "Fechados", "% fechado", "Vida mediana (d)", "Vida P90 (d)",
+       "n fechados c/ vida", "Em aberto", "Idade mediana (d)", "Mais antigo (d)",
+       ...FAIXAS_VIDA.map((f) => `Fechados ${f}`), ...FAIXAS_VIDA.map((f) => `Abertos ${f}`)],
+      (estado.tktExport.peso || []).map((r) => [
+        r.peso, r.total, r.fechados, n2(r.taxa_fech_pct), n2(r.vida_med_d), n2(r.vida_p90_d),
+        r.vida_n, r.abertos, n2(r.idade_med_d), r.idade_max_d != null ? r.idade_max_d : "",
+        ...(r.buckets_fechados || []), ...(r.buckets_abertos || []),
       ]));
   });
   $("btnExportTktRanking").addEventListener("click", () => {
