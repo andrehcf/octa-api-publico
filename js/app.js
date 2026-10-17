@@ -25,6 +25,7 @@
     secao: "performance",
     rankingSort: { col: "score", dir: "desc" },  // ordenação da tabela de ranking (gestão)
     temaSort: { col: "pares", dir: "desc" },     // ordenação do top de assuntos reincidentes
+    catSort: { col: "volume", dir: "desc" },     // ordenação das tabelas de "Por Categoria"
     rankingView: "fila",                         // "fila" (2 categorias) | "geral" (todo o Suporte)
     catView: "geral",                            // Por Categoria: "geral" (todas) | "fila" (Est+Conv / Especializado)
     rankingRows: [],                             // analistas agregados do período (p/ re-ordenar/exportar)
@@ -460,6 +461,30 @@
   };
 
   // membrosOverride: usa filas explícitas (visão "Por fila") em vez do filtro global.
+  // Colunas ordenáveis de "Por Categoria". Mesma mecânica do ranking e do top de assuntos.
+  const CAT_COLS = {
+    categoria:   { get: (c) => c.categoria_nome, tipo: "txt" },
+    volume:      { get: (c) => c.volume },
+    com_ticket:  { get: (c) => c.com_ticket },
+    tma:         { get: (c) => (c.tma_n ? c.tma_soma_seg / c.tma_n : null) },
+    csat:        { get: (c) => (c.csat_respondidos ? c.csat_soma_score / c.csat_respondidos : null) },
+    respondidos: { get: (c) => c.csat_respondidos },
+  };
+
+  function ordenarCategorias(rows) {
+    const { col, dir } = estado.catSort;
+    const def = CAT_COLS[col] || CAT_COLS.volume;
+    const mul = dir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const va = def.get(a), vb = def.get(b);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;      // nulo sempre por último
+      if (vb == null) return -1;
+      if (def.tipo === "txt") return mul * String(va).localeCompare(String(vb), "pt-BR");
+      return mul * (va - vb);
+    });
+  }
+
   // `comTicket`: a coluna "Virou ticket" (atendimentos daquela categoria que geraram ticket,
   // via v2_chat_tickets). Só as 3 tabelas de "Por Categoria" pedem — o card top-10 da
   // Performance fica com 5 colunas, senão aperta ao lado dos gráficos.
@@ -482,6 +507,11 @@
     if (meuSeq !== catSeq.get(tabelaId)) return;   // esta tabela teve nova chamada (filtro/período mudou)
     // Filtra ANTES do slice para não desperdiçar vaga do top com categoria oculta.
     if (ocultar) cats = cats.filter((c) => !CATEGORIAS_OCULTAS.has(c.categoria_nome));
+    // Ordena ANTES de cortar: trocar a coluna troca QUAIS categorias aparecem, não só a ordem.
+    // A RPC devolve até 250 (todas as do período), então o top sai do critério escolhido e não
+    // só das maiores em volume. O card da Performance não é .sortable: mantém a ordem da RPC.
+    const ordenavel = tabela.classList.contains("sortable");
+    if (ordenavel) cats = ordenarCategorias(cats);
     cats = cats.slice(0, limite);
     const sub = $(subId);
     if (sub) sub.textContent =
@@ -497,6 +527,13 @@
         <td class="num">${KPIS.fmtInt(c.csat_respondidos)}</td>
       </tr>`;
     }).join("") || `<tr><td colspan="${comTicket ? 6 : 5}" class="empty-note">Sem dados no período</td></tr>`;
+    if (ordenavel) {
+      tabela.querySelectorAll("thead th[data-col]").forEach((th) => {
+        const ativa = th.dataset.col === estado.catSort.col;
+        th.classList.toggle("sort-asc", ativa && estado.catSort.dir === "asc");
+        th.classList.toggle("sort-desc", ativa && estado.catSort.dir === "desc");
+      });
+    }
   }
 
   function renderCategoriasPerf() {
@@ -2490,6 +2527,20 @@
         r.sla_pct != null ? r.sla_pct.toFixed(2) : "",
         (r.media_final != null ? r.media_final.toFixed(2) : ""),
       ]));
+  });
+
+  // ── Por Categoria: ordenar por clique no cabeçalho (vale pras 3 tabelas da seção) ──
+  // Coluna nova começa DESCENDENTE; só "Categoria" (texto) começa A→Z.
+  $("sec-categorias").addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-col]");
+    if (!th || !th.closest("table.sortable")) return;
+    const col = th.dataset.col;
+    if (estado.catSort.col === col) {
+      estado.catSort.dir = estado.catSort.dir === "asc" ? "desc" : "asc";
+    } else {
+      estado.catSort = { col, dir: (CAT_COLS[col] || {}).tipo === "txt" ? "asc" : "desc" };
+    }
+    renderCategorias();
   });
 
   // ── Top de assuntos reincidentes: ordenar por clique no cabeçalho ──
