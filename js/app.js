@@ -960,6 +960,10 @@
   // Rampa ORDINAL de 1 hue (peso é ordinal, não categoria solta).
   const COR_PESO = { "Peso 1": "#ddd6fe", "Peso 2": "#a78bfa", "Peso 3": "#7c3aed" };
   const PESO_N_MIN = 10;   // abaixo disso a mediana pula com 1 ticket → marca ⚠
+  // A coluna da direita é CONTAGEM ("3 de 12"), não percentil: na mesa, P90 não se lê de
+  // passagem — contar quantos estouraram 30 dias responde a mesma pergunta sem conceito.
+  // É a ÚLTIMA faixa do histograma dos fechados (30d+), então acompanha FAIXAS_VIDA.
+  const I_VIDA_LONGA = FAIXAS_VIDA.length - 1;
 
   function renderTktPeso(linhas, cob, t) {
     const tbody = $("tabelaTktPeso") && $("tabelaTktPeso").querySelector("tbody");
@@ -1008,13 +1012,19 @@
         ? ` class="linha-ref" title="Referência — inclui formulários que não usam o campo Peso"` : "";
       const cor = COR_PESO[r.peso];
       const marca = cor ? `<span class="peso-swatch" style="background:${cor}"></span>` : "";
+      // "X de Y": X = fechados que passaram de 30d, Y = fechados com vida medida (= soma
+      // das faixas). Sem fechado medido não há o que contar → "—", nunca "0 de 0".
+      const longos = (r.buckets_fechados || [])[I_VIDA_LONGA] || 0;
+      const celLongos = r.vida_n
+        ? `${int(longos)} <span class="de-total">de ${int(r.vida_n)}</span>`
+        : "—";
       return `<tr${ref}>
         <td>${marca}${esc(r.peso)}</td>
         <td class="num">${int(r.total)}</td>
         <td class="num">${int(r.fechados)}</td>
         <td class="num">${KPIS.fmtPct(r.taxa_fech_pct, 1)}</td>
         <td class="num">${med}</td>
-        <td class="num">${dias(r.vida_p90_d)}</td>
+        <td class="num" title="Tickets fechados que levaram mais de 30 dias">${celLongos}</td>
         <td class="num">${int(r.abertos)}</td>
         <td class="num">${dias(r.idade_med_d)}</td>
         <td class="num">${r.idade_max_d != null ? dias(r.idade_max_d) : "—"}</td>

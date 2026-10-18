@@ -673,6 +673,8 @@ table.data td.num, table.data th.num { text-align: right; }
 table.data tr.linha-ref td { color: var(--muted); }
 /* Quadradinho da cor do peso, para casar a tabela com a legenda dos 2 histogramas. */
 .peso-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 7px; }
+/* "3 de 12": o denominador é contexto, fica apagado para o olho pegar a contagem. */
+.de-total { color: var(--muted); font-size: 11px; }
 
 /* Ranking: controles do card + cabeçalhos clicáveis (ordenação) */
 .ranking-controls { display: flex; align-items: center; gap: 8px; }
