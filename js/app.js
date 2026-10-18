@@ -1022,14 +1022,16 @@
           ? `<button class="vida-badge" data-peso="${esc(r.peso)}" title="Ver quais tickets">${int(longos)}</button>`
             + ` <span class="de-total">de ${int(r.vida_n)}</span>`
           : `0 <span class="de-total">de ${int(r.vida_n)}</span>`;
+      // Ordem: o total se abre em Abertos + Fechados logo de cara, e só depois vêm as
+      // métricas. Mexeu aqui? Mexa no <thead> do index.html e no CSV — não há mapa de colunas.
       return `<tr${ref}>
         <td>${marca}${esc(r.peso)}</td>
         <td class="num">${int(r.total)}</td>
+        <td class="num">${int(r.abertos)}</td>
         <td class="num">${int(r.fechados)}</td>
         <td class="num">${KPIS.fmtPct(r.taxa_fech_pct, 1)}</td>
         <td class="num">${med}</td>
         <td class="num" title="Tickets fechados que levaram mais de 30 dias">${celLongos}</td>
-        <td class="num">${int(r.abertos)}</td>
         <td class="num">${dias(r.idade_med_d)}</td>
         <td class="num">${r.idade_max_d != null ? dias(r.idade_max_d) : "—"}</td>
       </tr>`;
@@ -2744,12 +2746,13 @@
   $("btnExportTktPeso").addEventListener("click", () => {
     const n2 = (v) => (v == null ? "" : Number(v).toFixed(2).replace(".", ","));
     baixarCSV("tickets_vida_por_peso.csv",
-      ["Peso", "Tickets", "Fechados", "% fechado", "Vida mediana (d)", "Vida P90 (d)",
-       "n fechados c/ vida", "Em aberto", "Idade mediana (d)", "Mais antigo (d)",
+      // Mesma ordem da tabela na tela (o P90 fica só aqui, p/ quem for analisar fora).
+      ["Peso", "Tickets", "Abertos", "Fechados", "% fechado", "Vida mediana (d)", "Vida P90 (d)",
+       "n fechados c/ vida", "Idade mediana (d)", "Mais antigo (d)",
        ...FAIXAS_VIDA.map((f) => `Fechados ${f}`), ...FAIXAS_VIDA.map((f) => `Abertos ${f}`)],
       (estado.tktExport.peso || []).map((r) => [
-        r.peso, r.total, r.fechados, n2(r.taxa_fech_pct), n2(r.vida_med_d), n2(r.vida_p90_d),
-        r.vida_n, r.abertos, n2(r.idade_med_d), r.idade_max_d != null ? r.idade_max_d : "",
+        r.peso, r.total, r.abertos, r.fechados, n2(r.taxa_fech_pct), n2(r.vida_med_d), n2(r.vida_p90_d),
+        r.vida_n, n2(r.idade_med_d), r.idade_max_d != null ? r.idade_max_d : "",
         ...(r.buckets_fechados || []), ...(r.buckets_abertos || []),
       ]));
   });
