@@ -2128,11 +2128,17 @@
     };
     const sub = `${rows.length} ticket(s) · ${dia(f.ini)} a ${dia(f.fim)}`
       + ` · ${f.porFechamento ? "por fechamento" : "por abertura"}`;
+    // Nome fantasia do cliente (agg_tickets_fato.cliente). Nome longo é cortado com reticência
+    // via CSS e o nome inteiro fica no title — a modal não pode crescer na horizontal.
+    const cliente = (c) => (c
+      ? `<span class="tkt-cliente" title="${esc(c)}">${esc(c)}</span>`
+      : `<span class="tkt-sem-cliente" title="Este formulário não pede o nome fantasia">—</span>`);
     const linhas = rows.map((r) => `
       <tr>
         <td>${r.ticket_number != null
           ? `<a class="tkt-link" href="https://app.octadesk.com/ticket/edit/${r.ticket_number}" target="_blank" rel="noopener noreferrer" title="Abrir no Octadesk">#${r.ticket_number}</a>`
           : "—"}</td>
+        <td>${cliente(r.cliente)}</td>
         <td>${esc(r.status_name || "—")}</td>
         <td>${esc(r.assigned_name || "—")}</td>
         <td>${dia(r.created_dia)}</td>
@@ -2143,10 +2149,10 @@
       <p class="tkt-modal-sub">${esc(sub)}</p>
       <div class="table-wrap"><table class="data">
         <thead><tr>
-          <th>Ticket</th><th>Status</th><th>Analista</th><th>Aberto</th><th>Fechado</th>
+          <th>Ticket</th><th>Cliente</th><th>Status</th><th>Analista</th><th>Aberto</th><th>Fechado</th>
           <th class="num">Vida</th>
         </tr></thead>
-        <tbody>${linhas || `<tr><td colspan="6" class="tkt-modal-empty">Nenhum ticket passou de 30 dias no período.</td></tr>`}</tbody>
+        <tbody>${linhas || `<tr><td colspan="7" class="tkt-modal-empty">Nenhum ticket passou de 30 dias no período.</td></tr>`}</tbody>
       </table></div>`;
   }
   function fecharTktModal() { $("tktModal").hidden = true; }
