@@ -119,6 +119,41 @@
     },
   };
 
+  // Valor DENTRO da barra (barras agrupadas). Usado nos histogramas de Peso: com 3 datasets
+  // por faixa, rótulo em cima briga com a barra vizinha; dentro, cada número fica colado no
+  // seu dono. Barra baixa demais (< 16px) não comporta o texto → cai para cima dela.
+  // A cor do texto vem da luminância da própria barra, senão some no violeta escuro.
+  const rotuloDentroBarra = {
+    id: "rotuloDentroBarra",
+    afterDatasetsDraw(chart) {
+      const ctx = chart.ctx;
+      const corFora = getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#e6ebf5";
+      const claro = (hex) => {
+        const h = String(hex || "").replace("#", "");
+        if (h.length !== 6) return true;
+        const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 150;   // luminância perceptual
+      };
+      ctx.save();
+      ctx.font = "700 11px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      chart.data.datasets.forEach((ds, di) => {
+        const meta = chart.getDatasetMeta(di);
+        if (!meta || meta.hidden || !meta.data) return;
+        const dentro = claro(ds.backgroundColor) ? "#0a0f1e" : "#ffffff";
+        meta.data.forEach((bar, i) => {
+          const v = ds.data[i];
+          if (v == null) return;
+          const cabe = (bar.base - bar.y) >= 16;
+          ctx.fillStyle = cabe ? dentro : corFora;
+          ctx.textBaseline = cabe ? "top" : "bottom";
+          ctx.fillText(Math.round(v).toLocaleString("pt-BR"), bar.x, cabe ? bar.y + 4 : bar.y - 3);
+        });
+      });
+      ctx.restore();
+    },
+  };
+
   // ── Período selecionado ──
   // fim = último dia com dados; início = fim - dias + 1 (ou início da janela).
   function periodo() {
@@ -1069,11 +1104,9 @@
           })),
         },
         options: o,
-        // Rótulo em cima de cada barra. Só as faixas COM ticket recebem número, porque o 0
-        // virou null acima — é o que mantém legível um gráfico de 6 faixas × 3 pesos (na
-        // prática a maioria das faixas tem 1 ou 2 barras). O `grace` do eixo dá o respiro
-        // para o número do topo não encostar na borda.
-        plugins: [rotuloBarrasGrupo],
+        // Rótulo DENTRO da barra (cai para cima quando a barra é baixa demais). Só as faixas
+        // COM ticket recebem número, porque o 0 virou null acima.
+        plugins: [rotuloDentroBarra],
       };
     };
     novoChart("chartTktPesoFechados", cfg("buckets_fechados"));

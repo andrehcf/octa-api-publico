@@ -546,20 +546,24 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <div class="card-title">Vida dos Fechados, por Faixa</div>
-            <div class="card-subtitle">Só quem já fechou — a amostra que existe</div>
-          </div>
-        </div>
-        <div class="chart-wrap tall"><canvas id="chartTktPesoFechados"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Idade da Fila Aberta, por Faixa</div>
+            <div class="card-title">Abertos por Peso
+              <span class="kpi-info" tabindex="0" data-tip="<b>Onde está a fila parada agora.</b> Cada barra é a quantidade de tickets <b>ainda abertos</b>, agrupados por há quanto tempo foram abertos (<code>hoje − abertura</code>).<br><br>Serve para responder: <b>o que está envelhecendo e em qual peso?</b> Barra alta nas faixas da direita (15–30d, 30d+) é fila velha — ticket que continua correndo enquanto você lê.<br><br>É o gráfico para <b>agir</b>: ao contrário do de fechados, estes ainda dá para resolver. Ticket aberto hoje cai em &lt;1d; faixa vazia não desenha barra.">i</span>
+            </div>
             <div class="card-subtitle">Quem não fechou — o que a mediana não vê</div>
           </div>
         </div>
         <div class="chart-wrap tall"><canvas id="chartTktPesoAbertos"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Fechados por Peso
+              <span class="kpi-info" tabindex="0" data-tip="<b>Quanto tempo levou para resolver.</b> Cada barra é a quantidade de tickets <b>já fechados</b>, agrupados pelo tempo entre abertura e fechamento.<br><br>Serve para responder: <b>quando a gente resolve, demora quanto — e isso muda conforme o peso?</b> É histórico fechado, não muda mais.<br><br>Leia ao lado do gráfico de abertos: se aqui está vazio e lá está cheio, aquele peso quase não fecha — e a mediana da tabela, que só olha estes, engana.">i</span>
+            </div>
+            <div class="card-subtitle">Só quem já fechou — a amostra que existe</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartTktPesoFechados"></canvas></div>
       </div>
     </div>
 
@@ -884,11 +888,11 @@
   </div>
 </div>
 
-<script src="js/config.js?v=100"></script>
-<script src="js/kpis.js?v=100"></script>
-<script src="js/cache.js?v=100"></script>
-<script src="js/api.js?v=100"></script>
-<script src="js/app.js?v=100"></script>
+<script src="js/config.js?v=101"></script>
+<script src="js/kpis.js?v=101"></script>
+<script src="js/cache.js?v=101"></script>
+<script src="js/api.js?v=101"></script>
+<script src="js/app.js?v=101"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */
