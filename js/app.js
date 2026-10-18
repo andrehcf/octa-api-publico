@@ -1067,9 +1067,11 @@
           })),
         },
         options: o,
-        // SEM rotuloBarrasGrupo de propósito: são 18 barras por gráfico (6 faixas × 3 pesos)
-        // num card de meia largura — os valores colidem. O tooltip (mode "index", vindo de
-        // opts) já mostra os 3 pesos da faixa de uma vez.
+        // Rótulo em cima de cada barra. Só as faixas COM ticket recebem número, porque o 0
+        // virou null acima — é o que mantém legível um gráfico de 6 faixas × 3 pesos (na
+        // prática a maioria das faixas tem 1 ou 2 barras). O `grace` do eixo dá o respiro
+        // para o número do topo não encostar na borda.
+        plugins: [rotuloBarrasGrupo],
       };
     };
     novoChart("chartTktPesoFechados", cfg("buckets_fechados"));
