@@ -211,6 +211,9 @@ const API = (() => {
   // Lista os tickets estourados de UM formulário (para a modal ao clicar na contagem).
   const ticketsSlaEstourado   = (f, formName) =>
     _rpc("tickets_sla_estourado", { ..._tktParams(f), p_form_name: formName }).then((d) => d || []);
+  // Lista os tickets de UM peso que levaram mais de 30 dias (modal da coluna "Passaram de 30d").
+  const ticketsVidaLonga      = (f, peso) =>
+    _rpc("tickets_vida_longa", { ..._tktParams(f), p_peso: peso }).then((d) => d || []);
 
   // CARGA CORE (login): só o essencial da Performance (a seção padrão) — 3 tabelas em vez
   // de 9. As demais seções (Ranking/Bot/Reincidência/Auditoria) carregam SOB DEMANDA via
@@ -255,7 +258,7 @@ const API = (() => {
     carregarCore, carregarTabelas, categoriasPeriodo, chatsHoraPeriodo, distTmaPeriodo,
     tmaDistAnalistaPeriodo, cliente,
     limparCache, estadoCache: () => cache.estado(),
-    ticketsOpcoes, ticketsPainel, ticketsSlaEstourado,
+    ticketsOpcoes, ticketsPainel, ticketsSlaEstourado, ticketsVidaLonga,
     // modo analista
     meuPerfil, carregarTudoAnalista, categoriasPeriodoAnalista,
     chatsHoraPeriodoAnalista, meuRankingPeriodo,

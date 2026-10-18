@@ -675,6 +675,17 @@ table.data tr.linha-ref td { color: var(--muted); }
 .peso-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 7px; }
 /* "3 de 12": o denominador é contexto, fica apagado para o olho pegar a contagem. */
 .de-total { color: var(--muted); font-size: 11px; }
+/* Contagem clicável de "Passaram de 30d" (abre a modal com os tickets). Pílula neutra, não
+   vermelha como a de SLA: esses formulários não têm meta, não é estouro de alvo. */
+.vida-badge {
+  font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  color: var(--accent); background: var(--accent-soft);
+  border: 1px solid var(--accent); border-radius: 999px;
+  padding: 2px 10px; transition: all .15s;
+}
+.vida-badge:hover { filter: brightness(1.25); }
+/* Asterisco do ticket resolvido antes e tocado depois (vida medida até a atualização). */
+.vida-nota { color: var(--warn); cursor: help; margin-left: 2px; font-weight: 700; }
 
 /* Ranking: controles do card + cabeçalhos clicáveis (ordenação) */
 .ranking-controls { display: flex; align-items: center; gap: 8px; }

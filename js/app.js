@@ -1015,9 +1015,13 @@
       // "X de Y": X = fechados que passaram de 30d, Y = fechados com vida medida (= soma
       // das faixas). Sem fechado medido não há o que contar → "—", nunca "0 de 0".
       const longos = (r.buckets_fechados || [])[I_VIDA_LONGA] || 0;
-      const celLongos = r.vida_n
-        ? `${int(longos)} <span class="de-total">de ${int(r.vida_n)}</span>`
-        : "—";
+      // Contagem > 0 vira botão: abre a modal com QUAIS tickets são (nº + analista), igual
+      // ao badge de SLA estourado. Zero não é clicável (não há lista para mostrar).
+      const celLongos = !r.vida_n ? "—"
+        : longos
+          ? `<button class="vida-badge" data-peso="${esc(r.peso)}" title="Ver quais tickets">${int(longos)}</button>`
+            + ` <span class="de-total">de ${int(r.vida_n)}</span>`
+          : `0 <span class="de-total">de ${int(r.vida_n)}</span>`;
       return `<tr${ref}>
         <td>${marca}${esc(r.peso)}</td>
         <td class="num">${int(r.total)}</td>
@@ -2087,6 +2091,60 @@
         <tbody>${linhas || `<tr><td colspan="8" class="tkt-modal-empty">Nenhum ticket estourado no período.</td></tr>`}</tbody>
       </table></div>`;
   }
+  // Modal da coluna "Passaram de 30d": quais tickets daquele peso levaram +30 dias.
+  // Reusa a mesma #tktModal do SLA estourado (título/corpo trocados).
+  async function abrirTktVidaModal(peso) {
+    const f = estado.tktFiltro;
+    if (!f) return;
+    $("tktModalTitulo").textContent = `Passaram de 30 dias — ${peso}`;
+    $("tktModalBody").innerHTML = `<div class="tkt-modal-empty">Carregando…</div>`;
+    $("tktModal").hidden = false;
+    let rows;
+    try {
+      rows = await API.ticketsVidaLonga(f, peso);
+    } catch (e) {
+      console.error(e);
+      $("tktModalBody").innerHTML = `<div class="tkt-modal-empty">Erro ao carregar os tickets.</div>`;
+      return;
+    }
+    const dia = (d) => (d ? KPIS.fmtDiaCurto(d) : "—");
+    // A vida vem do tma_seg (última atualização), que é a regra de TMA de toda a aba. Em ~7%
+    // dos tickets longos o ticket foi RESOLVIDO antes e só foi tocado depois — aí a data de
+    // fechamento ao lado "não fecha" com a vida. Marca esses com * em vez de esconder.
+    const vidaCel = (r) => {
+      if (r.tma_seg == null) return "—";
+      const vidaD = r.tma_seg / 86400;
+      const porData = (r.created_dia && r.closed_dia)
+        ? (new Date(r.closed_dia + "T00:00:00") - new Date(r.created_dia + "T00:00:00")) / 86400000
+        : null;
+      const txt = KPIS.fmtDias(vidaD);
+      return (porData != null && vidaD - porData > 1)
+        ? `${txt}<span class="vida-nota" title="Resolvido em ${dia(r.closed_dia)}, mas atualizado depois. A vida é medida até a última atualização — mesma regra do TMA da aba.">*</span>`
+        : txt;
+    };
+    const sub = `${rows.length} ticket(s) · ${dia(f.ini)} a ${dia(f.fim)}`
+      + ` · ${f.porFechamento ? "por fechamento" : "por abertura"}`;
+    const linhas = rows.map((r) => `
+      <tr>
+        <td>${r.ticket_number != null
+          ? `<a class="tkt-link" href="https://app.octadesk.com/ticket/edit/${r.ticket_number}" target="_blank" rel="noopener noreferrer" title="Abrir no Octadesk">#${r.ticket_number}</a>`
+          : "—"}</td>
+        <td>${esc(r.status_name || "—")}</td>
+        <td>${esc(r.assigned_name || "—")}</td>
+        <td>${dia(r.created_dia)}</td>
+        <td>${dia(r.closed_dia)}</td>
+        <td class="num">${vidaCel(r)}</td>
+      </tr>`).join("");
+    $("tktModalBody").innerHTML = `
+      <p class="tkt-modal-sub">${esc(sub)}</p>
+      <div class="table-wrap"><table class="data">
+        <thead><tr>
+          <th>Ticket</th><th>Status</th><th>Analista</th><th>Aberto</th><th>Fechado</th>
+          <th class="num">Vida</th>
+        </tr></thead>
+        <tbody>${linhas || `<tr><td colspan="6" class="tkt-modal-empty">Nenhum ticket passou de 30 dias no período.</td></tr>`}</tbody>
+      </table></div>`;
+  }
   function fecharTktModal() { $("tktModal").hidden = true; }
 
   const RENDERS = {
@@ -2563,6 +2621,11 @@
   $("tabelaTktForm").addEventListener("click", (e) => {
     const b = e.target.closest(".sla-badge");
     if (b) abrirTktModal(b.dataset.form);
+  });
+  // Mesma modal, na coluna "Passaram de 30d" do bloco de Peso.
+  $("tabelaTktPeso").addEventListener("click", (e) => {
+    const b = e.target.closest(".vida-badge");
+    if (b) abrirTktVidaModal(b.dataset.peso);
   });
   $("tktModalFechar").addEventListener("click", fecharTktModal);
   $("tktModal").addEventListener("click", (e) => { if (e.target === $("tktModal")) fecharTktModal(); });
