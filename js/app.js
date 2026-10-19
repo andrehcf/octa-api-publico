@@ -154,6 +154,67 @@
     },
   };
 
+  // Rótulo para barra HORIZONTAL EMPILHADA (indexAxis:'y'). Dois trabalhos:
+  //  1) o valor DENTRO de cada segmento, só quando o texto cabe na LARGURA dele. Diferente do
+  //     rotuloDentroBarra (vertical), aqui NÃO existe "cair para fora": num empilhado, fora é
+  //     dentro do vizinho. Segmento estreito fica sem número — está no tooltip.
+  //  2) um texto livre na PONTA direita da barra, vindo de
+  //     options.plugins.rotuloBarraH.pontas[i] = {texto, alerta, prefixo}. `prefixo` (o total)
+  //     só entra quando a barra inteira é fina demais p/ qualquer número dentro — senão um tipo
+  //     de 1 ticket não mostraria número nenhum.
+  const rotuloBarraH = {
+    id: "rotuloBarraH",
+    afterDatasetsDraw(chart, _args, opcoes) {
+      const ctx = chart.ctx;
+      const raiz = getComputedStyle(document.documentElement);
+      const corFora = raiz.getPropertyValue("--text").trim() || "#e6ebf5";
+      const corAlerta = raiz.getPropertyValue("--warn").trim() || "#f2b544";
+      const claro = (hex) => {
+        const h = String(hex || "").replace("#", "");
+        if (h.length !== 6) return true;
+        const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 150;
+      };
+      const FOLGA = 10, ALTURA_MIN = 14;
+      const pontas = [];   // x da ponta de cada barra (maior x entre os datasets VISÍVEIS)
+      ctx.save();
+      ctx.font = "700 11px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      chart.data.datasets.forEach((ds, di) => {
+        if (!chart.isDatasetVisible(di)) return;
+        const meta = chart.getDatasetMeta(di);
+        if (!meta || !meta.data) return;
+        const dentro = claro(ds.backgroundColor) ? "#0a0f1e" : "#ffffff";
+        meta.data.forEach((bar, i) => {
+          pontas[i] = Math.max(pontas[i] == null ? -Infinity : pontas[i], bar.x);
+          const v = ds.data[i];
+          if (!v) return;                                 // 0/null não recebe rótulo
+          if ((bar.height || 99) < ALTURA_MIN) return;     // horizontal: height = espessura
+          const txt = Math.round(v).toLocaleString("pt-BR");
+          if (Math.abs(bar.x - bar.base) < ctx.measureText(txt).width + FOLGA) return;
+          ctx.fillStyle = dentro;
+          ctx.fillText(txt, (bar.base + bar.x) / 2, bar.y);
+        });
+      });
+      const lista = (opcoes && opcoes.pontas) || [];
+      const meta0 = chart.getDatasetMeta(0);
+      const x0 = chart.scales.x.getPixelForValue(0);
+      ctx.font = "600 11px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "left";
+      lista.forEach((p, i) => {
+        const bar = meta0 && meta0.data && meta0.data[i];
+        if (!p || !p.texto || !bar || pontas[i] == null) return;
+        const estreita = p.prefixo != null
+          && (pontas[i] - x0) < ctx.measureText(String(p.prefixo)).width + FOLGA;
+        ctx.fillStyle = p.alerta ? corAlerta : corFora;
+        ctx.fillText((estreita ? `${p.prefixo} · ` : "") + p.texto + (p.alerta ? " ⚠" : ""),
+                     pontas[i] + 6, bar.y);
+      });
+      ctx.restore();
+    },
+  };
+
   // ── Período selecionado ──
   // fim = último dia com dados; início = fim - dias + 1 (ou início da janela).
   function periodo() {
@@ -955,6 +1016,8 @@
 
     // Tempo de vida por Peso (duas pernas: vida de quem fechou + idade de quem não fechou)
     renderTktPeso(painel.por_peso, painel.peso_cobertura, t);
+    // Volume e vida por Serviço N2 (barra horizontal; '(sem serviço)' fica fora do gráfico)
+    renderTktServico(painel.por_servico, t);
 
     // Ranking de analistas
     $("tabelaTktRanking").querySelector("tbody").innerHTML = ranking.map((r) => `
@@ -1113,6 +1176,123 @@
     novoChart("chartTktPesoAbertos", cfg("buckets_abertos"));
     // Sem delta vs período anterior de propósito: a coorte anterior teve mais tempo para fechar,
     // então qualquer delta de % fechado ou de vida seria viés de maturação, não melhora/piora.
+  }
+
+  // ── Volume e vida por Serviço N2 ──
+  // 1 barra por serviço, empilhada abertos+fechados (soma = volume), já ordenada por volume
+  // pela RPC. A vida mediana dos FECHADOS vai na ponta direita. '(sem serviço)' fica FORA do
+  // gráfico (3,2 mil contra 1 esmagaria a escala) e vira a linha de cobertura embaixo.
+  const COR_TKT_ABERTOS = "#fbbf24";    // âmbar — a mesma do KPI card "Em aberto"
+  const COR_TKT_FECHADOS = "#34d399";   // verde — a mesma do KPI card "Fechados"
+  const SERVICO_SEM = "(sem serviço)";  // CONTRATO com o COALESCE de servico_lin na migration
+  const SERVICO_N_MIN = 10;             // mesmo corte do bloco de Peso: abaixo disso, ⚠
+
+  function renderTktServico(linhas, t) {
+    if (!$("chartTktServico")) return;
+    const stats = $("statsTktServico"), sub = $("subTktServico");
+    const int = (x) => KPIS.fmtInt(x || 0);
+    const vazio = (msg) => {
+      novoChart("chartTktServico", {
+        type: "bar", data: { labels: [], datasets: [] },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: "y",
+                   plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                   scales: { x: { display: false }, y: { display: false } } },
+      });
+      if (stats) stats.textContent = msg;
+    };
+
+    // undefined (≠ []) = JSON guardado por uma versão ANTERIOR do site (os params da RPC não
+    // mudaram, então sem o bump do ?v= o cache serve a resposta velha, sem por_servico).
+    if (linhas === undefined) {
+      vazio("Recarregue a página (Ctrl+F5) — resposta em cache de uma versão anterior.");
+      return;
+    }
+    linhas = linhas || [];
+    const semServico = linhas.find((r) => r.servico === SERVICO_SEM);
+    const lin = linhas.filter((r) => r.servico !== SERVICO_SEM);   // já vem em volume desc
+
+    // Mesmos dois filtros que apagam o pedaço âmbar por definição (ver o bloco de Peso).
+    const avisos = [];
+    if (t.porFechamento) avisos.push("modo <b>Fechamento</b>: os abertos (âmbar) saem do recorte");
+    if ((t.statuses || []).length) avisos.push("filtro de <b>Status</b>: a divisão aberto/fechado reflete só o status escolhido");
+    if (sub) sub.innerHTML = "Volume por tipo de serviço · vida mediana dos fechados na ponta da barra"
+      + (avisos.length ? ` — ${avisos.join(" · ")}` : "");
+
+    if (!lin.length) { vazio("Nenhum ticket com Serviço N2 preenchido no recorte"); return; }
+
+    // Cobertura calculada do próprio dado (a linha '(sem serviço)' é o complemento) — nunca
+    // cravada no HTML: o campo é manual e a cobertura muda sozinha.
+    if (stats) {
+      const comN = lin.reduce((a, r) => a + (Number(r.total) || 0), 0);
+      const semN = semServico ? Number(semServico.total) || 0 : 0;
+      const tot = comN + semN;
+      stats.innerHTML = tot
+        ? `Serviço preenchido em <b>${int(comN)}</b> de <b>${int(tot)}</b> tickets do recorte `
+          + `(<b>${KPIS.fmtPct(100 * comN / tot, 1)}</b>) · os <b>${int(semN)}</b> sem o campo ficam `
+          + `fora do gráfico · campo manual, só nos formulários de N2`
+        : "";
+    }
+
+    novoChart("chartTktServico", {
+      type: "bar",
+      data: {
+        labels: lin.map((r) => r.servico),   // nome COMPLETO (o tick trunca; o tooltip não)
+        datasets: [
+          // Abertos ancorado no ZERO: é o pedaço acionável e, no zero, dá p/ comparar linha a
+          // linha. A ponta direita sobra p/ os fechados — que é onde entra a vida mediana deles.
+          { label: "Abertos", data: lin.map((r) => Number(r.abertos) || 0),
+            backgroundColor: COR_TKT_ABERTOS, borderRadius: 4, borderSkipped: "middle", maxBarThickness: 32 },
+          { label: "Fechados", data: lin.map((r) => Number(r.fechados) || 0),
+            backgroundColor: COR_TKT_FECHADOS, borderRadius: 4, borderSkipped: "middle", maxBarThickness: 32 },
+        ],
+      },
+      options: {
+        indexAxis: "y",   // barra HORIZONTAL: nome de serviço não cabe em eixo vertical
+        responsive: true, maintainAspectRatio: false,
+        // axis:"y" é obrigatório: sem ele o modo index agrupa pelo eixo X e o hover pega errado.
+        interaction: { mode: "index", intersect: false, axis: "y" },
+        plugins: {
+          legend: { display: true, position: "top",
+            labels: { boxWidth: 12, usePointStyle: true, pointStyle: "rect", color: CHART_TEXT, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (c) => `${c.dataset.label}: ${KPIS.fmtInt(c.parsed.x || 0)}`,
+              afterBody: (items) => {
+                const r = lin[items[0].dataIndex];
+                const l = [`Total: ${int(r.total)} · ${KPIS.fmtPct(r.taxa_fech_pct, 1)} fechado`];
+                l.push(r.vida_med_d == null
+                  ? "Vida mediana: — (nenhum fechado no recorte)"
+                  : `Vida mediana dos fechados: ${KPIS.fmtDias(r.vida_med_d)} (n=${int(r.vida_n)})`);
+                if (r.idade_med_d != null) l.push(`Idade mediana dos abertos: ${KPIS.fmtDias(r.idade_med_d)}`);
+                if ((r.vida_n || 0) < SERVICO_N_MIN) l.push("⚠ n pequeno: a mediana pula com 1 ticket");
+                return l;
+              },
+            },
+          },
+          rotuloBarraH: {
+            pontas: lin.map((r) => ({
+              texto: r.vida_med_d == null ? "" : KPIS.fmtDias(r.vida_med_d),
+              alerta: (r.vida_n || 0) < SERVICO_N_MIN,
+              prefixo: int(r.total),   // só aparece se a barra for fina demais p/ número dentro
+            })),
+          },
+        },
+        scales: {
+          // X = eixo de VALOR. O grace reserva a folga à direita onde o texto da ponta é escrito.
+          x: { stacked: true, beginAtZero: true, grace: "12%",
+               grid: { color: GRID }, ticks: { precision: 0 } },
+          // Y = categorias. autoSkip:false porque a decisão é MOSTRAR TODOS os tipos.
+          y: { stacked: true, grid: { display: false },
+               ticks: { autoSkip: false, color: CHART_TEXT, font: { size: 11 },
+                 callback(v) {
+                   const s = String(this.getLabelForValue(v));   // em escala category, v é o índice
+                   const lim = this.chart.width < 520 ? 14 : 24;
+                   return s.length > lim ? s.slice(0, lim - 1) + "…" : s;
+                 } } },
+        },
+      },
+      plugins: [rotuloBarraH],
+    });
   }
 
   // Popula os dropdowns de filtro de tickets (formulários/analistas via RPC; status fixo).

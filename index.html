@@ -567,6 +567,24 @@
       </div>
     </div>
 
+    <!-- Volume e vida por Serviço N2: 1 barra por serviço (abertos + fechados = volume), vida
+         mediana dos fechados na ponta. '(sem serviço)' fica fora (esmagaria a escala) e vira a
+         linha de cobertura. Primeiro gráfico HORIZONTAL do projeto (ver rotuloBarraH no app.js). -->
+    <div class="chart-grid full">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Volume e Vida por Serviço N2
+              <span class="kpi-info" tabindex="0" data-tip="<b>Que tipo de serviço ocupa a fila do N2 — e quanto cada um demora.</b> Cada barra é o volume do serviço, partido em <b>abertos</b> (âmbar) + <b>fechados</b> (verde); a soma é o volume total. O número na <b>ponta</b> é a vida mediana dos FECHADOS daquele tipo (abertura → fechamento).<br><br>Serve para decidir <b>o que atacar primeiro</b>: barra longa = muito volume; número grande na ponta = demora. Volume alto com vida curta é rotina; volume baixo com vida longa é pedra no sapato.<br><br><b>Leia com estes limites:</b><br>• Campo <b>manual</b>: só cerca de 1 em cada 4 tickets do recorte tem serviço preenchido (a linha embaixo do gráfico diz quantos), e ele só existe nos formulários de N2 — isto <b>não</b> é o retrato do suporte inteiro.<br>• <b>Bug é quase 2 de cada 3</b> tickets com serviço: a escala é dele e os tipos pequenos ficam espremidos. Nenhum tipo é escondido, de propósito.<br>• Tipo com <b>n pequeno</b> tem mediana que pula com 1 ticket: vem marcado com ⚠. Segmento estreito não comporta o número dentro da barra — passe o mouse.<br>• A mediana <b>só olha quem fechou</b>. Tipo que quase não fecha aparece rápido, porque os poucos fechados dele são os fáceis. Compare com o pedaço âmbar e com a <b>idade mediana dos abertos</b>, que está no tooltip.<br><br>O bloco segue os filtros da barra: no modo <b>Fechamento</b> o âmbar desaparece por definição, e com <b>Status</b> filtrado a divisão aberto/fechado reflete só o status escolhido — o subtítulo avisa.">i</span>
+            </div>
+            <div class="card-subtitle" id="subTktServico">Volume por tipo de serviço · vida mediana dos fechados na ponta da barra</div>
+          </div>
+        </div>
+        <div class="chart-wrap xtall"><canvas id="chartTktServico"></canvas></div>
+        <div class="dist-stats" id="statsTktServico"></div>
+      </div>
+    </div>
+
     <div class="chart-grid two-one">
       <div class="card analista-hide">
         <div class="card-header">
@@ -888,11 +906,11 @@
   </div>
 </div>
 
-<script src="js/config.js?v=101"></script>
-<script src="js/kpis.js?v=101"></script>
-<script src="js/cache.js?v=101"></script>
-<script src="js/api.js?v=101"></script>
-<script src="js/app.js?v=101"></script>
+<script src="js/config.js?v=102"></script>
+<script src="js/kpis.js?v=102"></script>
+<script src="js/cache.js?v=102"></script>
+<script src="js/api.js?v=102"></script>
+<script src="js/app.js?v=102"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */
