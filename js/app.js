@@ -215,6 +215,60 @@
     },
   };
 
+  // Valor em cima de cada ponto da linha. SÓ quando há poucos pontos (`maxPontos`): num mês
+  // inteiro seriam 60 números em cima da linha e vira borrão — aí o tooltip continua sendo o
+  // caminho. Cada série escreve na SUA cor e em lado oposto (1ª acima, 2ª abaixo), senão os
+  // dois números se encavalam quando as linhas se aproximam.
+  const rotuloPontos = {
+    id: "rotuloPontos",
+    afterDatasetsDraw(chart, _args, opcoes) {
+      const max = (opcoes && opcoes.maxPontos) || 12;
+      if ((chart.data.labels || []).length > max) return;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.font = "700 10px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      chart.data.datasets.forEach((ds, di) => {
+        const meta = chart.getDatasetMeta(di);
+        if (!meta || meta.hidden || !meta.data) return;
+        ctx.fillStyle = ds.borderColor || "#e6ebf5";
+        ctx.textBaseline = di === 0 ? "bottom" : "top";
+        meta.data.forEach((pt, i) => {
+          const v = ds.data[i];
+          if (v == null) return;
+          ctx.fillText(Math.round(v).toLocaleString("pt-BR"), pt.x, pt.y + (di === 0 ? -7 : 9));
+        });
+      });
+      ctx.restore();
+    },
+  };
+
+  // Total no miolo do gráfico de rosca (o vazio do `cutout` estava sobrando). Soma só as
+  // fatias VISÍVEIS, então esconder uma pela legenda recalcula o número.
+  const totalNoMiolo = {
+    id: "totalNoMiolo",
+    afterDatasetsDraw(chart, _args, opcoes) {
+      const meta = chart.getDatasetMeta(0);
+      const arco = meta && meta.data && meta.data[0];
+      if (!arco) return;
+      const dados = (chart.data.datasets[0] || {}).data || [];
+      const total = dados.reduce((a, v, i) => a + (chart.getDataVisibility(i) ? Number(v) || 0 : 0), 0);
+      const raiz = getComputedStyle(document.documentElement);
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.fillStyle = raiz.getPropertyValue("--text").trim() || "#e6ebf5";
+      ctx.font = "700 20px system-ui, -apple-system, sans-serif";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(total.toLocaleString("pt-BR"), arco.x, arco.y + 2);
+      ctx.fillStyle = raiz.getPropertyValue("--muted").trim() || "#8893aa";
+      ctx.font = "600 10px system-ui, -apple-system, sans-serif";
+      ctx.textBaseline = "top";
+      ctx.fillText((opcoes && opcoes.rotulo) || "total", arco.x, arco.y + 5);
+      ctx.restore();
+    },
+  };
+
   // ── Período selecionado ──
   // fim = último dia com dados; início = fim - dias + 1 (ou início da janela).
   function periodo() {
@@ -982,19 +1036,7 @@
     setar("subTktFluxo", `${int(kpis.abertos_fluxo)} criados · ${int(kpis.fechados_fluxo)} fechados no período`);
 
     // Evolução diária (total / fechados)
-    novoChart("chartTicketsFluxo", {
-      type: "line",
-      data: {
-        labels: ts.map((r) => KPIS.fmtDiaCurto(r.dia)),
-        datasets: [
-          { label: "Total", data: ts.map((r) => r.total),
-            borderColor: "#4f7cf7", backgroundColor: "rgba(79,124,247,0.08)", tension: 0.4, pointRadius: 2, fill: true },
-          { label: "Fechados", data: ts.map((r) => r.fechados),
-            borderColor: "#34d399", backgroundColor: "rgba(52,211,153,0.08)", tension: 0.4, pointRadius: 2, fill: true },
-        ],
-      },
-      options: opts({ y: { beginAtZero: true } }),
-    });
+    renderTktFluxo(ts);
 
     // Por formulário + SLA
     $("tabelaTktForm").querySelector("tbody").innerHTML = forms.map((r) => `
@@ -1031,20 +1073,72 @@
       </tr>`).join("") || `<tr><td colspan="6" class="empty-note">Sem dados no período</td></tr>`;
 
     // Por status
+    renderTktStatus(status);
+  }
+
+  // Evolução diária: linha dupla (total × fechados) com o valor em cima de cada ponto quando
+  // o período é curto — ver rotuloPontos. Função própria p/ poder testar com dado real.
+  function renderTktFluxo(ts) {
+    novoChart("chartTicketsFluxo", {
+      type: "line",
+      data: {
+        labels: ts.map((r) => KPIS.fmtDiaCurto(r.dia)),
+        datasets: [
+          { label: "Total", data: ts.map((r) => r.total),
+            borderColor: "#4f7cf7", backgroundColor: "rgba(79,124,247,0.08)", tension: 0.4, pointRadius: 2, fill: true },
+          { label: "Fechados", data: ts.map((r) => r.fechados),
+            borderColor: "#34d399", backgroundColor: "rgba(52,211,153,0.08)", tension: 0.4, pointRadius: 2, fill: true },
+        ],
+      },
+      options: (() => {
+        const o = opts({ y: { beginAtZero: true, grace: "12%" } });   // grace: respiro p/ o rótulo do topo
+        o.plugins.rotuloPontos = { maxPontos: 12 };
+        return o;
+      })(),
+      plugins: [rotuloPontos],
+    });
+  }
+
+  // Por status: rosca com o número JUNTO do rótulo na legenda (e o total no miolo) — antes só
+  // aparecia no hover. Porcentagem sem casa decimal: é leitura de relance, não conferência.
+  function renderTktStatus(status) {
+    const CORES = ["#34d399", "#4f7cf7", "#fbbf24", "#f87171", "#a78bfa", "#22d3ee"];
+    const total = status.reduce((a, r) => a + (Number(r.total) || 0), 0);
     novoChart("chartTicketsStatus", {
       type: "doughnut",
       data: {
         labels: status.map((r) => r.status_name),
-        datasets: [{
-          data: status.map((r) => r.total),
-          backgroundColor: ["#34d399", "#4f7cf7", "#fbbf24", "#f87171", "#a78bfa", "#22d3ee"],
-          borderWidth: 0,
-        }],
+        datasets: [{ data: status.map((r) => r.total), backgroundColor: CORES, borderWidth: 0 }],
       },
       options: {
         responsive: true, maintainAspectRatio: false, cutout: "62%",
-        plugins: { legend: { position: "right", labels: { boxWidth: 10, font: { size: 11 } } } },
+        plugins: {
+          totalNoMiolo: { rotulo: "tickets" },
+          legend: {
+            position: "right",
+            labels: {
+              boxWidth: 10, font: { size: 11 }, color: CHART_TEXT,
+              // Monta o rótulo à mão: "Resolvido · 3.010 (72%)". `index` + `hidden` mantêm o
+              // clique da legenda funcionando (o onClick padrão da rosca usa os dois).
+              generateLabels(chart) {
+                const ds = chart.data.datasets[0] || { data: [] };
+                return (chart.data.labels || []).map((rot, i) => {
+                  const v = Number(ds.data[i]) || 0;
+                  const pct = total ? ` (${KPIS.fmtPct(100 * v / total, 0)})` : "";
+                  return {
+                    text: `${rot} · ${KPIS.fmtInt(v)}${pct}`,
+                    fillStyle: CORES[i % CORES.length], strokeStyle: CORES[i % CORES.length],
+                    lineWidth: 0, hidden: !chart.getDataVisibility(i), index: i,
+                  };
+                });
+              },
+            },
+          },
+          tooltip: { callbacks: { label: (c) => ` ${KPIS.fmtInt(c.parsed)}`
+            + (total ? ` · ${KPIS.fmtPct(100 * c.parsed / total, 1)}` : "") } },
+        },
       },
+      plugins: [totalNoMiolo],
     });
   }
 
