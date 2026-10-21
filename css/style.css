@@ -567,6 +567,9 @@ body {
 }
 .chart-grid.half { grid-template-columns: 1fr 1fr; }
 .chart-grid.full { grid-template-columns: 1fr; }
+/* display:grid vence a regra [hidden] do navegador — sem isto o card de "Acionamentos por
+   dia" continuaria ocupando espaço fora dos filtros de semana. */
+.chart-grid[hidden] { display: none; }
 .chart-grid.two-one { grid-template-columns: 2fr 1fr; }
 .chart-grid.one-two { grid-template-columns: 1fr 2fr; }
 

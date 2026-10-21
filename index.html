@@ -8,7 +8,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://dholqliulwtnrsjgxjqp.supabase.co https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="no-referrer">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=74">
+<link rel="stylesheet" href="css/style.css?v=75">
 <script>
   /* Anti-flash: aplica o tema salvo (ou o do sistema no 1º acesso) antes do render */
   (function () {
@@ -174,6 +174,22 @@
         <div class="kpi-value indigo" id="kpiResolvidos">—</div>
         <div class="kpi-row"><span class="kpi-delta" id="kpiResolvidosDelta"></span><span class="kpi-anterior">ANTERIOR <b id="kpiResolvidosAnt">—</b></span></div>
         <div class="kpi-foot" id="kpiResolvidosFoot"></div>
+      </div>
+    </div>
+
+    <!-- Acionamentos por dia: só aparece nos filtros de SEMANA (ver renderVolumeDia no app.js).
+         Sai do agg_chats_dia que já está em memória — nenhuma consulta nova. -->
+    <div class="chart-grid full" id="gridVolumeDia" hidden>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Acionamentos por dia
+              <span class="kpi-info" tabindex="0" data-tip="<b>Quantos atendimentos entraram em cada dia da semana selecionada</b>, de domingo a sábado. É o mesmo <b>volume atendido</b> do KPI lá de cima, só que aberto por dia — e segue o filtro de fila/tag/origem.<br><br>Serve para achar o <b>dia atípico</b>: queda forte numa segunda costuma ser feriado, e o pico no dia seguinte é o acúmulo voltando. Fim de semana é naturalmente baixo (plantão), então compare sábado com sábado, não com quarta.<br><br>Em <b>Essa semana</b> aparecem só os dias já decorridos — dia que ainda não aconteceu não vira barra zerada. O card <b>só existe nos filtros de semana</b>; em Hoje/Ontem seria uma barra só, e em Mês ainda está para ser decidido.">i</span>
+            </div>
+            <div class="card-subtitle" id="subVolumeDia">Domingo a sábado da semana selecionada</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chartVolumeDia"></canvas></div>
       </div>
     </div>
 
@@ -906,11 +922,11 @@
   </div>
 </div>
 
-<script src="js/config.js?v=104"></script>
-<script src="js/kpis.js?v=104"></script>
-<script src="js/cache.js?v=104"></script>
-<script src="js/api.js?v=104"></script>
-<script src="js/app.js?v=104"></script>
+<script src="js/config.js?v=105"></script>
+<script src="js/kpis.js?v=105"></script>
+<script src="js/cache.js?v=105"></script>
+<script src="js/api.js?v=105"></script>
+<script src="js/app.js?v=105"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */

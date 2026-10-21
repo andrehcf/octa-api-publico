@@ -414,11 +414,55 @@
 
   // ══════════════ PERFORMANCE ══════════════
 
+  // Acionamentos por dia (dom→sáb). SÓ nos filtros de semana: em Hoje/Ontem seria uma barra
+  // só, e em Mês ainda não foi decidido se é total ou média por dia da semana. Lê das mesmas
+  // `linhas` que os KPIs já usam (agg_chats_dia em memória) — zero consulta nova e segue o
+  // filtro de fila/tag/origem de graça.
+  const DIAS_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+  function renderVolumeDia(linhas, p) {
+    const grid = $("gridVolumeDia");
+    if (!grid) return;
+    // Período personalizado (estado.range) fica de fora: pode ter qualquer tamanho.
+    const porSemana = !estado.range && (estado.preset === "semana" || estado.preset === "semana-passada");
+    grid.hidden = !porSemana;
+    if (!porSemana) return;
+
+    const porDia = new Map(linhas.map((r) => [r.dia, Number(r.volume_atendido) || 0]));
+    const dias = [];
+    const d = new Date(p.inicio + "T00:00:00Z");
+    for (let i = 0; i < 7; i++) {
+      const iso = d.toISOString().slice(0, 10);
+      if (iso > p.fim) break;   // "Essa semana": dia que ainda não chegou não vira barra zerada
+      dias.push({ iso, dow: d.getUTCDay(), v: porDia.get(iso) || 0 });
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+
+    const total = dias.reduce((a, x) => a + x.v, 0);
+    const sub = $("subVolumeDia");
+    if (sub) sub.textContent = dias.length
+      ? `${KPIS.fmtDiaCurto(dias[0].iso)} a ${KPIS.fmtDiaCurto(dias[dias.length - 1].iso)}`
+        + ` · ${KPIS.fmtInt(total)} acionamentos · ${filaLabel(estado.filaAplicada)}`
+      : "Sem dias no período";
+
+    novoChart("chartVolumeDia", {
+      type: "bar",
+      data: {
+        // Rótulo em 2 linhas (dia da semana + data): o Chart.js quebra arrays em linhas.
+        labels: dias.map((x) => [DIAS_SEMANA[x.dow], KPIS.fmtDiaCurto(x.iso)]),
+        datasets: [{ data: dias.map((x) => x.v), backgroundColor: "#4f7cf7",
+                     borderRadius: 7, borderSkipped: false, maxBarThickness: 64 }],
+      },
+      options: opts({ y: { beginAtZero: true, grace: "12%" } }),
+      plugins: [rotuloDentroBarra],   // valor dentro da barra (cai p/ fora se a barra for baixa)
+    });
+  }
+
   function renderPerformance() {
     const p = periodo();
     if (!p) return;
     const linhas = linhasFilaPorDia(estado.filaAplicada, p.inicio, p.fim);
     const k = KPIS.kpisChats(linhas);
+    renderVolumeDia(linhas, p);   // card por dia (só nos filtros de semana)
 
     const pAnt = periodoAnterior(p);
     const kAnt = pAnt
