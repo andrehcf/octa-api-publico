@@ -1120,15 +1120,21 @@
               boxWidth: 10, font: { size: 11 }, color: CHART_TEXT,
               // Monta o rótulo à mão: "Resolvido · 3.010 (72%)". `index` + `hidden` mantêm o
               // clique da legenda funcionando (o onClick padrão da rosca usa os dois).
+              // ⚠️ `fontColor` é OBRIGATÓRIO em generateLabels próprio: o Chart.js desenha o
+              // texto com `ctx.fillStyle = legendItem.fontColor` (o `color` de labels só vale
+              // para quem usa o generateLabels padrão). Sem ele, cai no preto do canvas e o
+              // texto some no tema escuro.
               generateLabels(chart) {
                 const ds = chart.data.datasets[0] || { data: [] };
+                const cor = cssVar("--chart-text", "#8893aa");   // lido na hora: acompanha o tema
                 return (chart.data.labels || []).map((rot, i) => {
                   const v = Number(ds.data[i]) || 0;
                   const pct = total ? ` (${KPIS.fmtPct(100 * v / total, 0)})` : "";
                   return {
                     text: `${rot} · ${KPIS.fmtInt(v)}${pct}`,
                     fillStyle: CORES[i % CORES.length], strokeStyle: CORES[i % CORES.length],
-                    lineWidth: 0, hidden: !chart.getDataVisibility(i), index: i,
+                    fontColor: cor, lineWidth: 0,
+                    hidden: !chart.getDataVisibility(i), index: i,
                   };
                 });
               },
