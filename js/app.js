@@ -512,38 +512,12 @@
     setar("kpiCsatFoot", `${KPIS.fmtInt(k.respondidos)} resp. · méd. ${media1(k.csatMedia)} · ${KPIS.fmtPct(k.engajamentoPct)} eng.`);
     setar("kpiResolvidosFoot", `${KPIS.fmtInt(k.resolvSim)} / ${KPIS.fmtInt(k.resolvTotal)} resolvidos`);
 
-    const labels = linhas.map((r) => KPIS.fmtDiaCurto(r.dia));
-    const subVol = $("subVolumeDia");
-    if (subVol) subVol.textContent =
-      `${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)} — ${filaLabel(estado.filaAplicada)}`;
-
-    novoChart("chartVolumeDia", {
-      type: "line",
-      data: {
-        labels,
-        datasets: [{
-          label: "Atendidos",
-          data: linhas.map((r) => r.volume_atendido),
-          borderColor: "#4f7cf7", backgroundColor: "rgba(79,124,247,0.08)",
-          tension: 0.4, pointRadius: 2, fill: true,
-        }],
-      },
-      options: opts({ y: { beginAtZero: true } }),
-    });
-
-    novoChart("chartTempoDia", {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          { label: "TME (min)", data: linhas.map((r) => r.tme_n ? r.tme_soma_seg / r.tme_n / 60 : null),
-            borderColor: "#22d3ee", backgroundColor: "rgba(34,211,238,0.08)", tension: 0.4, pointRadius: 2 },
-          { label: "TMA (min)", data: linhas.map((r) => r.tma_n ? r.tma_soma_seg / r.tma_n / 60 : null),
-            borderColor: "#14b8a6", backgroundColor: "rgba(20,184,166,0.08)", tension: 0.4, pointRadius: 2 },
-        ],
-      },
-      options: opts({ y: { beginAtZero: true } }),
-    });
+    // (Aqui havia 2 gráficos LEGADOS por dia — `chartVolumeDia` em linha e `chartTempoDia`.
+    //  Os canvases deles saíram do HTML num enxugamento de layout e o código ficou rodando no
+    //  vazio, porque novoChart ignora canvas inexistente. Ao criar o canvas do card novo
+    //  "Acionamentos por dia", o legado reencontrou o id `chartVolumeDia`, desenhou a linha por
+    //  cima das barras e ainda sobrescreveu o `subVolumeDia`. Removido: quem desenha esse id
+    //  agora é renderVolumeDia, no topo desta seção.)
   }
 
   // Distribuição de TMA do PERÍODO selecionado, FILTRADA pela fila — histograma +
