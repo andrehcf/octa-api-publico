@@ -184,22 +184,12 @@
         <div class="card-header">
           <div>
             <div class="card-title">Acionamentos por dia
-              <span class="kpi-info" tabindex="0" data-tip="<b>Quantos atendimentos entraram em cada dia da semana selecionada</b>, de domingo a sábado. É o mesmo <b>volume atendido</b> do KPI lá de cima, só que aberto por dia — e segue o filtro de fila/tag/origem.<br><br>Serve para achar o <b>dia atípico</b>: queda forte numa segunda costuma ser feriado, e o pico no dia seguinte é o acúmulo voltando. Fim de semana é naturalmente baixo (plantão), então compare sábado com sábado, não com quarta.<br><br>A <b>tabela embaixo</b> repete, dia a dia, os mesmos indicadores dos cards do topo — mesma conta, só que por dia; a última linha é o fechamento da semana.<br><br>Em <b>Essa semana</b> aparecem só os dias já decorridos — dia que ainda não aconteceu não vira barra zerada. O card <b>só existe nos filtros de semana</b>; em Hoje/Ontem seria uma barra só, e em Mês ainda está para ser decidido.">i</span>
+              <span class="kpi-info" tabindex="0" data-tip="<b>Quantos atendimentos entraram em cada dia da semana selecionada</b>, de domingo a sábado. É o mesmo <b>volume atendido</b> do KPI lá de cima, só que aberto por dia — e segue o filtro de fila/tag/origem.<br><br>Serve para achar o <b>dia atípico</b>: queda forte numa segunda costuma ser feriado, e o pico no dia seguinte é o acúmulo voltando. Fim de semana é naturalmente baixo (plantão), então compare sábado com sábado, não com quarta.<br><br>Dentro de cada coluna vêm, além do volume, os <b>mesmos indicadores dos cards do topo</b> (TME, TMA, abandono, engajamento, CSAT e resolvidos) calculados só com aquele dia — mesma conta, recorte menor.<br><br>Em <b>Essa semana</b> aparecem só os dias já decorridos — dia que ainda não aconteceu não vira barra zerada. O card <b>só existe nos filtros de semana</b>; em Hoje/Ontem seria uma barra só, e em Mês ainda está para ser decidido.">i</span>
             </div>
             <div class="card-subtitle" id="subVolumeDia">Domingo a sábado da semana selecionada</div>
           </div>
         </div>
-        <div class="chart-wrap tall"><canvas id="chartVolumeDia"></canvas></div>
-        <div class="table-wrap" style="margin-top:14px">
-          <table class="data" id="tabelaVolumeDia">
-            <thead><tr>
-              <th>Dia</th><th class="num">Acionamentos</th><th class="num">TME</th><th class="num">TMA</th>
-              <th class="num">Abandono</th><th class="num">Engajamento</th><th class="num">CSAT</th>
-              <th class="num">Resolvidos</th>
-            </tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
+        <div class="chart-wrap xtall"><canvas id="chartVolumeDia"></canvas></div>
       </div>
     </div>
 
@@ -932,11 +922,11 @@
   </div>
 </div>
 
-<script src="js/config.js?v=108"></script>
-<script src="js/kpis.js?v=108"></script>
-<script src="js/cache.js?v=108"></script>
-<script src="js/api.js?v=108"></script>
-<script src="js/app.js?v=108"></script>
+<script src="js/config.js?v=109"></script>
+<script src="js/kpis.js?v=109"></script>
+<script src="js/cache.js?v=109"></script>
+<script src="js/api.js?v=109"></script>
+<script src="js/app.js?v=109"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */

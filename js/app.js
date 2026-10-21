@@ -269,6 +269,47 @@
     },
   };
 
+  // Pilha de métricas DENTRO da coluna (card "Acionamentos por dia"). Cada barra recebe várias
+  // linhas de texto empilhadas de baixo p/ cima, a partir do eixo: volume no topo da pilha,
+  // indicadores abaixo. A cor é decidida LINHA A LINHA — se aquela altura cai dentro da barra,
+  // texto escuro sobre o azul; se já passou do topo da barra (dia de volume baixo), texto claro
+  // sobre o fundo do card. É o que permite mostrar os 7 números mesmo na barra de 89.
+  // `options.plugins.rotuloColunaDia.linhas[i]` = array de strings daquela coluna.
+  const rotuloColunaDia = {
+    id: "rotuloColunaDia",
+    afterDatasetsDraw(chart, _args, opcoes) {
+      const porColuna = (opcoes && opcoes.linhas) || [];
+      const meta = chart.getDatasetMeta(0);
+      if (!meta || !meta.data || !porColuna.length) return;
+      const raiz = getComputedStyle(document.documentElement);
+      const corClara = raiz.getPropertyValue("--text").trim() || "#e6ebf5";
+      // Mesma regra de luminância dos outros plugins: barra clara pede texto escuro, barra
+      // escura pede branco. A barra azul (#4f7cf7) é escura — texto escuro nela não se lê.
+      const hex = String((chart.data.datasets[0] || {}).backgroundColor || "").replace("#", "");
+      const lum = hex.length === 6
+        ? 0.299 * parseInt(hex.slice(0, 2), 16) + 0.587 * parseInt(hex.slice(2, 4), 16)
+          + 0.114 * parseInt(hex.slice(4, 6), 16)
+        : 0;
+      const corDentro = lum > 150 ? "#0a0f1e" : "#ffffff";
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      meta.data.forEach((bar, i) => {
+        const txts = porColuna[i] || [];
+        let y = bar.base - 7;                       // começa logo acima do eixo
+        for (let j = txts.length - 1; j >= 0; j--) {  // de baixo p/ cima: txts[0] fica no topo
+          ctx.font = j === 0 ? "700 13px system-ui, -apple-system, sans-serif"
+                             : "600 11px system-ui, -apple-system, sans-serif";
+          ctx.fillStyle = (y - 3 > bar.y) ? corDentro : corClara;   // dentro da barra?
+          ctx.fillText(txts[j], bar.x, y);
+          y -= (j === 0 ? 17 : 14);
+        }
+      });
+      ctx.restore();
+    },
+  };
+
   // ── Período selecionado ──
   // fim = último dia com dados; início = fim - dias + 1 (ou início da janela).
   function periodo() {
@@ -448,35 +489,25 @@
         + ` · ${KPIS.fmtInt(total)} acionamentos · ${filaLabel(estado.filaAplicada)}`
       : "Sem dias no período";
 
-    // Tabela dia a dia com os MESMOS indicadores dos cards do topo (dia sem linha = "—").
-    const tbody = $("tabelaVolumeDia") && $("tabelaVolumeDia").querySelector("tbody");
-    if (tbody) {
-      const pct = (v) => (v == null ? "—" : KPIS.fmtPct(v));
-      const dur = (v) => (v == null ? "—" : KPIS.fmtDuracao(v));
-      const celulas = (k) => `
-        <td class="num">${dur(k.tmeSeg)}</td>
-        <td class="num">${dur(k.tmaSeg)}</td>
-        <td class="num">${pct(k.abandonoPct)}</td>
-        <td class="num">${pct(k.engajamentoPct)}</td>
-        <td class="num">${pct(k.csatPct)}</td>
-        <td class="num">${pct(k.resolvidosPct)}</td>`;
-      const corpo = dias.map((x) => {
-        const k = x.row ? KPIS.kpisChats([x.row]) : null;
-        return `<tr>
-          <td>${DIAS_SEMANA[x.dow]} · ${KPIS.fmtDiaCurto(x.iso)}</td>
-          <td class="num">${KPIS.fmtInt(x.v)}</td>
-          ${k ? celulas(k) : '<td class="num">—</td>'.repeat(6)}
-        </tr>`;
-      }).join("");
-      // Fechamento da semana: mesma conta sobre todas as linhas (= os cards do topo).
-      const kTudo = KPIS.kpisChats(dias.map((x) => x.row).filter(Boolean));
-      tbody.innerHTML = corpo
-        + `<tr class="linha-ref"><td>Semana</td><td class="num">${KPIS.fmtInt(total)}</td>${celulas(kTudo)}</tr>`;
-    }
-
     // ~110px por rótulo é o que "Domingo - 11/10" ocupa a 11px; abaixo disso, 2 linhas.
     const larguraCanvas = (($("chartVolumeDia") || {}).parentElement || {}).clientWidth || 0;
     const umaLinha = larguraCanvas >= dias.length * 110;
+
+    // Métricas de cada dia, para a pilha dentro da coluna. Saem de KPIS.kpisChats([linha]),
+    // a MESMA função dos cards do topo — por construção não divergem dos KPIs do período.
+    // Em coluna estreita (mobile) só o volume sobrevive: 7 linhas de texto não caberiam.
+    const larguraColuna = larguraCanvas / Math.max(dias.length, 1);
+    const cabeMetricas = larguraColuna >= 88;
+    const pilhas = dias.map((x) => {
+      const n = [KPIS.fmtInt(x.v)];
+      if (!cabeMetricas || !x.row) return n;
+      const k = KPIS.kpisChats([x.row]);
+      const pct = (v) => (v == null ? "—" : KPIS.fmtPct(v));
+      const dur = (v) => (v == null ? "—" : KPIS.fmtDuracao(v));
+      n.push(`TME ${dur(k.tmeSeg)}`, `TMA ${dur(k.tmaSeg)}`, `Aband. ${pct(k.abandonoPct)}`,
+             `Engaj. ${pct(k.engajamentoPct)}`, `CSAT ${pct(k.csatPct)}`, `Resol. ${pct(k.resolvidosPct)}`);
+      return n;
+    });
 
     novoChart("chartVolumeDia", {
       type: "bar",
@@ -489,8 +520,13 @@
         datasets: [{ data: dias.map((x) => x.v), backgroundColor: "#4f7cf7",
                      borderRadius: 7, borderSkipped: false, maxBarThickness: 64 }],
       },
-      options: opts({ y: { beginAtZero: true, grace: "12%" } }),
-      plugins: [rotuloDentroBarra],   // valor dentro da barra (cai p/ fora se a barra for baixa)
+      options: (() => {
+        // grace alto: a pilha de 7 linhas precisa de espaço acima da barra mais baixa.
+        const o = opts({ y: { beginAtZero: true, grace: cabeMetricas ? "45%" : "12%" } });
+        o.plugins.rotuloColunaDia = { linhas: pilhas };
+        return o;
+      })(),
+      plugins: [rotuloColunaDia],
     });
   }
 
