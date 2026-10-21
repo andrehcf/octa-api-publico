@@ -132,11 +132,13 @@
       const fmt = (opcoes && opcoes.fmt) || ((v) => Math.round(v).toLocaleString("pt-BR"));
       const ctx = chart.ctx;
       const corFora = getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#e6ebf5";
+      // Luminância perceptual. Aceita #rrggbb e #rrggbbaa (o alfa é ignorado de propósito:
+      // barra translúcida sobre o card escuro fica MAIS escura, então segue pedindo texto claro).
       const claro = (hex) => {
-        const h = String(hex || "").replace("#", "");
+        const h = String(hex || "").replace("#", "").slice(0, 6);
         if (h.length !== 6) return true;
         const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
-        return (0.299 * r + 0.587 * g + 0.114 * b) > 150;   // luminância perceptual
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 150;
       };
       ctx.save();
       ctx.font = "700 11px system-ui, -apple-system, sans-serif";
@@ -144,8 +146,11 @@
       chart.data.datasets.forEach((ds, di) => {
         const meta = chart.getDatasetMeta(di);
         if (!meta || meta.hidden || !meta.data) return;
-        const dentro = claro(ds.backgroundColor) ? "#0a0f1e" : "#ffffff";
         meta.data.forEach((bar, i) => {
+          // Cor POR BARRA: quando backgroundColor é array (semanas parciais), ler do dataset
+          // daria a string inteira e o contraste sairia errado em todas as barras.
+          const corBarra = (bar.options && bar.options.backgroundColor) || ds.backgroundColor;
+          const dentro = claro(corBarra) ? "#0a0f1e" : "#ffffff";
           const v = ds.data[i];
           if (v == null) return;
           const cabe = (bar.base - bar.y) >= 16;
@@ -447,58 +452,86 @@
     const grid = $("gridVolumeDia");
     if (!grid) return;
     // Período personalizado (estado.range) fica de fora: pode ter qualquer tamanho.
-    const porSemana = !estado.range && (estado.preset === "semana" || estado.preset === "semana-passada");
-    grid.hidden = !porSemana;
-    if (!porSemana) return;
+    const porDia = estado.preset === "semana" || estado.preset === "semana-passada";
+    const porSemana = estado.preset === "mes" || estado.preset === "mes-passado";
+    grid.hidden = estado.range || !(porDia || porSemana);
+    if (grid.hidden) return;
 
-    // Guarda a LINHA inteira do dia (não só o volume): a tabela abaixo do gráfico reaproveita
-    // KPIS.kpisChats([linha]) para cada dia, que é a mesma fórmula dos cards do topo — assim
-    // TME/TMA/abandono/CSAT por dia nunca divergem do KPI do período.
-    const porDia = new Map(linhas.map((r) => [r.dia, r]));
-    const dias = [];
+    // ── Grupos do eixo: um por DIA (filtros de semana) ou um por SEMANA dom→sáb (filtros de
+    // mês). O laço anda dia a dia pelo CALENDÁRIO, não pelas linhas do banco: assim um dia sem
+    // dado ainda conta para o tamanho da semana (é o que permite detectar semana parcial), e
+    // dia futuro não entra (o laço para em p.fim).
+    const iso = (dt) => dt.toISOString().slice(0, 10);
+    const porDiaMap = new Map(linhas.map((r) => [r.dia, r]));
+    const grupos = [];
     const d = new Date(p.inicio + "T00:00:00Z");
-    for (let i = 0; i < 7; i++) {
-      const iso = d.toISOString().slice(0, 10);
-      if (iso > p.fim) break;   // "Essa semana": dia que ainda não chegou não vira barra zerada
-      const row = porDia.get(iso) || null;
-      dias.push({ iso, dow: d.getUTCDay(), row, v: Number(row && row.volume_atendido) || 0 });
+    const fimDt = new Date(p.fim + "T00:00:00Z");
+    while (d <= fimDt) {
+      const dia = iso(d), row = porDiaMap.get(dia) || null, dow = d.getUTCDay();
+      if (porDia) {
+        grupos.push({ ini: dia, fim: dia, dow, dias: 1, rows: row ? [row] : [] });
+      } else {
+        const dom = new Date(d); dom.setUTCDate(dom.getUTCDate() - dow);   // domingo da semana
+        const chave = iso(dom);
+        let g = grupos[grupos.length - 1];
+        if (!g || g.chave !== chave) { g = { chave, ini: dia, fim: dia, dias: 0, rows: [] }; grupos.push(g); }
+        g.fim = dia; g.dias += 1;
+        if (row) g.rows.push(row);
+      }
       d.setUTCDate(d.getUTCDate() + 1);
     }
+    // Semana com menos de 7 dias DENTRO do mês: começo/fim de mês e o mês em curso.
+    grupos.forEach((g) => { g.parcial = !porDia && g.dias < 7; });
 
     dadosVolumeDia = { linhas, p };   // p/ o clique nas abas redesenhar sem ir ao banco
-    const mSub = METRICAS_DIA[estado.metricaDia] || METRICAS_DIA.volume;
-    const kSemana = KPIS.kpisChats(dias.map((x) => x.row).filter(Boolean));
-    const vSemana = mSub.val(kSemana);
+    const m = METRICAS_DIA[estado.metricaDia] || METRICAS_DIA.volume;
+    const titulo = $("tituloVolumeDia");
+    if (titulo) titulo.textContent = porDia ? "Indicadores por dia" : "Indicadores por semana";
+
+    const kPeriodo = KPIS.kpisChats(linhas);
+    const vPeriodo = m.val(kPeriodo);
+    const parciais = grupos.filter((g) => g.parcial).length;
     const sub = $("subVolumeDia");
-    if (sub) sub.textContent = dias.length
-      ? `${KPIS.fmtDiaCurto(dias[0].iso)} a ${KPIS.fmtDiaCurto(dias[dias.length - 1].iso)}`
-        + ` · ${mSub.rot} no período: ${vSemana == null ? "—" : mSub.fmt(vSemana)}`
+    if (sub) sub.textContent = grupos.length
+      ? `${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)}`
+        + ` · ${m.rot} no período: ${vPeriodo == null ? "—" : m.fmt(vPeriodo)}`
         + ` · ${filaLabel(estado.filaAplicada)}`
+        + (parciais ? ` · ${parciais} semana(s) parcial(is), em tom mais claro` : "")
       : "Sem dias no período";
 
     // ~110px por rótulo é o que "Domingo - 11/10" ocupa a 11px; abaixo disso, 2 linhas.
     const larguraCanvas = (($("chartVolumeDia") || {}).parentElement || {}).clientWidth || 0;
-    const umaLinha = larguraCanvas >= dias.length * 110;
-
-    const m = METRICAS_DIA[estado.metricaDia] || METRICAS_DIA.volume;
-    const valores = dias.map((x) => (x.row ? m.val(KPIS.kpisChats([x.row])) : null));
+    const umaLinha = larguraCanvas >= grupos.length * 110;
+    const rotulo = (g) => {
+      if (porDia) {
+        const nome = DIAS_SEMANA[g.dow], data = KPIS.fmtDiaCurto(g.ini);
+        return umaLinha ? `${nome} - ${data}` : [nome, data];
+      }
+      const faixa = `${KPIS.fmtDiaCurto(g.ini)} a ${KPIS.fmtDiaCurto(g.fim)}`;
+      return g.parcial ? [faixa, `${g.dias} dias`] : faixa;
+    };
+    const valores = grupos.map((g) => (g.rows.length ? m.val(KPIS.kpisChats(g.rows)) : null));
+    // Semana parcial com a mesma cor, só que apagada + contorno: continua comparável no olho,
+    // mas avisa que aquela barra não cobre 7 dias.
+    const fundo = grupos.map((g) => (g.parcial ? m.cor + "59" : m.cor));
 
     novoChart("chartVolumeDia", {
       type: "bar",
       data: {
-        // "Domingo - 11/10" numa linha só quando há largura; apertado (mobile, sidebar aberta)
-        // o rótulo vira 2 linhas — array no `labels` é o que o Chart.js quebra em linhas.
-        labels: dias.map((x) => (umaLinha
-          ? `${DIAS_SEMANA[x.dow]} - ${KPIS.fmtDiaCurto(x.iso)}`
-          : [DIAS_SEMANA[x.dow], KPIS.fmtDiaCurto(x.iso)])),
-        datasets: [{ data: valores, backgroundColor: m.cor,
+        labels: grupos.map(rotulo),
+        datasets: [{ data: valores, backgroundColor: fundo,
+                     borderColor: m.cor, borderWidth: grupos.map((g) => (g.parcial ? 1 : 0)),
                      borderRadius: 7, borderSkipped: false, maxBarThickness: 64 }],
       },
       options: (() => {
         const o = opts({ y: { beginAtZero: true, grace: "12%",
           ticks: { callback: (v) => `${KPIS.fmtInt(Math.round(v))}${m.suf}` } } });
         o.plugins.rotuloDentroBarra = { fmt: m.fmt };   // rótulo na unidade do indicador
-        o.plugins.tooltip = { callbacks: { label: (c) => ` ${m.rot}: ${m.fmt(c.parsed.y)}` } };
+        o.plugins.tooltip = { callbacks: {
+          label: (c) => ` ${m.rot}: ${c.parsed.y == null ? "—" : m.fmt(c.parsed.y)}`,
+          afterLabel: (c) => (grupos[c.dataIndex].parcial
+            ? `semana parcial — ${grupos[c.dataIndex].dias} de 7 dias` : ""),
+        } };
         return o;
       })(),
       plugins: [rotuloDentroBarra],
