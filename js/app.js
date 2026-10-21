@@ -418,7 +418,7 @@
   // só, e em Mês ainda não foi decidido se é total ou média por dia da semana. Lê das mesmas
   // `linhas` que os KPIs já usam (agg_chats_dia em memória) — zero consulta nova e segue o
   // filtro de fila/tag/origem de graça.
-  const DIAS_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+  const DIAS_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
   function renderVolumeDia(linhas, p) {
     const grid = $("gridVolumeDia");
     if (!grid) return;
@@ -444,11 +444,18 @@
         + ` · ${KPIS.fmtInt(total)} acionamentos · ${filaLabel(estado.filaAplicada)}`
       : "Sem dias no período";
 
+    // ~110px por rótulo é o que "Domingo - 11/10" ocupa a 11px; abaixo disso, 2 linhas.
+    const larguraCanvas = (($("chartVolumeDia") || {}).parentElement || {}).clientWidth || 0;
+    const umaLinha = larguraCanvas >= dias.length * 110;
+
     novoChart("chartVolumeDia", {
       type: "bar",
       data: {
-        // Rótulo em 2 linhas (dia da semana + data): o Chart.js quebra arrays em linhas.
-        labels: dias.map((x) => [DIAS_SEMANA[x.dow], KPIS.fmtDiaCurto(x.iso)]),
+        // "Domingo - 11/10" numa linha só quando há largura; apertado (mobile, sidebar aberta)
+        // o rótulo vira 2 linhas — array no `labels` é o que o Chart.js quebra em linhas.
+        labels: dias.map((x) => (umaLinha
+          ? `${DIAS_SEMANA[x.dow]} - ${KPIS.fmtDiaCurto(x.iso)}`
+          : [DIAS_SEMANA[x.dow], KPIS.fmtDiaCurto(x.iso)])),
         datasets: [{ data: dias.map((x) => x.v), backgroundColor: "#4f7cf7",
                      borderRadius: 7, borderSkipped: false, maxBarThickness: 64 }],
       },
