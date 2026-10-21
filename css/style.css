@@ -717,15 +717,23 @@ table.sortable thead th.sort-desc::after { content: "\2193"; opacity: .95; color
 .pos-badge.top3 { background: rgba(217,119,6,.18); color: #d97706; }
 
 /* ══════ HEATMAP ══════ */
-.heatmap { display: grid; grid-template-columns: 42px repeat(24, 1fr); gap: 3px; font-size: 9.5px; }
+/* O nº de colunas sai do JS (só as horas com movimento), por isso grid-template-columns
+   vai inline em renderHeatSemana. O wrap rola na horizontal no celular. */
+.heatmap-wrap { overflow-x: auto; }
+.heatmap { display: grid; gap: 3px; font-size: 11px; min-width: 560px; }
 .heatmap .hm-corner { }
-.heatmap .hm-hour { text-align: center; color: var(--muted); align-self: end; padding-bottom: 2px; }
-.heatmap .hm-dow { color: var(--muted); display: flex; align-items: center; font-size: 10.5px; }
+.heatmap .hm-hour { text-align: center; color: var(--muted); align-self: end; padding-bottom: 3px; }
+.heatmap .hm-dow {
+  color: var(--muted); display: flex; align-items: center; gap: 4px;
+  font-size: 10.5px; white-space: nowrap;
+}
+.heatmap .hm-dow b { color: var(--text); font-weight: 600; }
 .heatmap .hm-cell {
-  aspect-ratio: 1.4;
-  border-radius: 3px;
+  height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
   background: var(--surface2);
-  position: relative;
+  font-weight: 600; font-variant-numeric: tabular-nums;
   min-width: 0;
 }
 .heatmap .hm-cell:hover { outline: 1px solid var(--accent); }
@@ -804,7 +812,7 @@ body.modo-analista .chart-grid.two-one { grid-template-columns: 1fr; }
   .kpi-grid, .kpi-grid.cols-4, .kpi-grid.cols-5 { grid-template-columns: repeat(2, 1fr); }
   .chart-grid, .chart-grid.half, .chart-grid.two-one, .chart-grid.one-two { grid-template-columns: 1fr; }
   .chart-grid > :last-child { grid-column: auto; }
-  .heatmap { font-size: 8px; }
+  .heatmap { font-size: 10px; }
 }
 @media (max-width: 480px) {
   .page-title h1 { font-size: 17px; }

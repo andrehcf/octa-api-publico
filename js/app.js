@@ -795,10 +795,90 @@
 
   let diaHoraReqSeq = 0;   // guarda de corrida (descarta resposta obsoleta da RPC)
 
+  const presetSemana = () =>
+    !estado.range && (estado.preset === "semana" || estado.preset === "semana-passada");
+
+  // ── Grade dia × hora ── só nos filtros de SEMANA ────────────────────────────────
+  // A RPC agrega por (dow, hora), não por (dia, hora). Numa semana dom→sáb cada dow é UMA
+  // data concreta, então a célula é a CONTAGEM daquele dia — não média de várias semanas.
+  // Em qualquer período maior a mesma célula somaria 4 ou 5 segundas e o número só faria
+  // sentido dividido pelo nº de ocorrências (outra conta) — por isso o card some fora da semana.
+  function renderHeatSemana(grade, hs, p) {
+    const grid = $("gridDiaHora");
+    if (!grid) return;
+    grid.hidden = !presetSemana();
+    if (grid.hidden) return;
+
+    // Linhas = dias JÁ DECORRIDOS: em "Essa semana" o laço para em p.fim, então dia que
+    // ainda não aconteceu não vira linha vazia.
+    const dias = [];
+    const d = new Date(p.inicio + "T00:00:00Z"), fimDt = new Date(p.fim + "T00:00:00Z");
+    while (d <= fimDt) {
+      dias.push({ dow: d.getUTCDay(), iso: d.toISOString().slice(0, 10) });
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    // O ÚLTIMO dia pode vir zerado mesmo tendo acontecido: o sync é diário, então hoje só
+    // entra amanhã. Linha vazia no fim não informa nada e some. Dia zerado no MEIO da semana
+    // fica — ali o vazio é o dado.
+    while (dias.length && !hs.some((h) => grade[dias[dias.length - 1].dow][h])) dias.pop();
+
+    let max = 0, total = 0, pico = null;
+    for (const dia of dias) for (const h of hs) {
+      const v = grade[dia.dow][h] || 0;
+      total += v;
+      if (v > max) { max = v; pico = { dia, h, v }; }
+    }
+
+    // Cor do número: a célula é o accent com ALFA, então quem decide o contraste é o que
+    // está atrás (o card). Misturo na mão e escolho pelo resultado — serve aos dois temas
+    // sem `if (claro)`, e o toggle de tema já chama render() de novo.
+    const hexRgb = (v, padrao) => {
+      const h = String(v || "").trim().replace("#", "");
+      return h.length === 6 ? [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) : padrao;
+    };
+    const fundo = hexRgb(getComputedStyle(document.documentElement).getPropertyValue("--surface"), [17, 24, 39]);
+    const ACC = [79, 124, 247];
+    const corTexto = (a) => {
+      const PESO = [0.299, 0.587, 0.114];
+      const lum = PESO.reduce((s, w, i) => s + w * (a * ACC[i] + (1 - a) * fundo[i]), 0);
+      return lum > 150 ? "#0a0f1e" : "#ffffff";
+    };
+
+    const DOWS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+    let html = `<div class="hm-corner"></div>`
+      + hs.map((h) => `<div class="hm-hour">${h}h</div>`).join("");
+    for (const dia of dias) {
+      html += `<div class="hm-dow"><b>${DOWS[dia.dow].slice(0, 3)}</b> ${KPIS.fmtDiaCurto(dia.iso)}</div>`;
+      for (const h of hs) {
+        const v = grade[dia.dow][h] || 0;
+        if (!v) { html += `<div class="hm-cell"></div>`; continue; }
+        const a = 0.12 + 0.88 * (v / (max || 1));
+        html += `<div class="hm-cell cheia"`
+          + ` title="${DOWS[dia.dow]}, ${KPIS.fmtDiaCurto(dia.iso)} às ${h}h — ${KPIS.fmtInt(v)} chats"`
+          + ` style="background:rgba(${ACC.join(",")},${a.toFixed(2)});color:${corTexto(a)}"`
+          + `>${KPIS.fmtInt(v)}</div>`;
+      }
+    }
+    const el = $("heatmap");
+    if (el) {
+      // Nº de colunas muda com as horas que tiveram movimento — por isso inline, não no CSS.
+      el.style.gridTemplateColumns = `78px repeat(${hs.length}, minmax(34px, 1fr))`;
+      el.innerHTML = html;
+    }
+    const sub = $("subDiaHora");
+    if (sub) sub.textContent = total
+      ? `${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)} · ${KPIS.fmtInt(total)} chats`
+        + ` · pico ${DOWS[pico.dia.dow].toLowerCase()} às ${pico.h}h com ${KPIS.fmtInt(pico.v)}`
+        + ` · ${filaLabel(estado.filaAplicada)}`
+      : "Sem chats no período";
+  }
+
   async function renderDiaHora() {
     const p = periodo();
     if (!p) return;
     const meuSeq = ++diaHoraReqSeq;
+    const gh = $("gridDiaHora");
+    if (gh) gh.hidden = !presetSemana();   // antes do await: nao deixa piscar a grade velha
     let linhas;   // linhas agregadas por (dow, hora) vindas da RPC
     try {
       linhas = await fonteChatsHora(p.inicio, p.fim, membrosDaFila(estado.filaAplicada));
@@ -839,22 +919,6 @@
       // analistas = array dos arrays diários (jsonb_agg); achata e deduplica.
       for (const arr of (r.analistas || [])) for (const a of arr) analistasPorHora[r.hora].add(a);
     }
-    const maxCell = Math.max(1, ...grade.flat());
-    const DOWS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-    let html = `<div class="hm-corner"></div>` +
-      Array.from({ length: 24 }, (_, h) => `<div class="hm-hour">${h}</div>`).join("");
-    for (let d = 0; d < 7; d++) {
-      html += `<div class="hm-dow">${DOWS[d]}</div>`;
-      for (let h = 0; h < 24; h++) {
-        const v = grade[d][h];
-        const alpha = v ? 0.15 + 0.85 * (v / maxCell) : 0;
-        html += `<div class="hm-cell" title="${DOWS[d]} ${h}h — ${KPIS.fmtInt(v)} atendimentos"
-          style="${v ? `background:rgba(79,124,247,${alpha.toFixed(2)})` : ""}"></div>`;
-      }
-    }
-    const elHm = $("heatmap");
-    if (elHm) elHm.innerHTML = html;
-
     // Só as horas com volume (remove madrugada/horários vazios) — usado por todos os
     // gráficos horários (Volume, TME e Série temporal).
     let hIni = 24, hFim = -1;
@@ -862,6 +926,7 @@
     if (hFim < hIni) { hIni = 0; hFim = 23; }
     const hs = [];
     for (let h = hIni; h <= hFim; h++) hs.push(h);
+    renderHeatSemana(grade, hs, p);
     const pctH = (a, b) => (b ? 100 * a / b : null);
     const minH = (o) => (o.n ? o.soma / o.n / 60 : null);
 

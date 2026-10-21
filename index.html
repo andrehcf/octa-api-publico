@@ -8,7 +8,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://dholqliulwtnrsjgxjqp.supabase.co https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="no-referrer">
 <title>CPlug Suporte — Performance de Atendimento</title>
-<link rel="stylesheet" href="css/style.css?v=75">
+<link rel="stylesheet" href="css/style.css?v=76">
 <script>
   /* Anti-flash: aplica o tema salvo (ou o do sistema no 1º acesso) antes do render */
   (function () {
@@ -199,6 +199,23 @@
           </div>
         </div>
         <div class="chart-wrap tall"><canvas id="chartVolumeDia"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Quando os chats chegam: grade dia × hora, só nos filtros de SEMANA (ver
+         renderHeatSemana no app.js). Reaproveita a MESMA resposta da RPC chats_hora_periodo
+         que os gráficos horários abaixo já pedem — nenhuma consulta nova. -->
+    <div class="chart-grid full" id="gridDiaHora" hidden>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Quando os chats chegam
+              <span class="kpi-info" tabindex="0" data-tip="<b>Quantos chats entraram em cada hora de cada dia da semana selecionada</b> (BRT). A célula é a <b>contagem daquele dia e hora</b>, não uma média: numa semana cada linha é uma data só. Segue o filtro de fila/tag/origem.<br><br>Serve para <b>escalar gente na hora certa</b>: a célula mais forte é o pico do dia, e comparar as linhas mostra quando o pico <b>muda de hora</b> — segunda de feriado joga a demanda inteira para a terça.<br><br>Só aparecem as <b>horas que tiveram movimento</b> no período; madrugada sem chat não vira coluna vazia. Em <b>Essa semana</b> entram apenas os dias já decorridos.<br><br>O card <b>só existe nos filtros de semana</b>. Em período maior a mesma célula somaria 4 ou 5 segundas-feiras diferentes, e o número só faria sentido dividido pelo número de ocorrências — isso é outra conta, não esta.">i</span>
+            </div>
+            <div class="card-subtitle" id="subDiaHora">Chats por hora em cada dia da semana</div>
+          </div>
+        </div>
+        <div class="heatmap-wrap"><div class="heatmap" id="heatmap"></div></div>
       </div>
     </div>
 
@@ -931,11 +948,11 @@
   </div>
 </div>
 
-<script src="js/config.js?v=111"></script>
-<script src="js/kpis.js?v=111"></script>
-<script src="js/cache.js?v=111"></script>
-<script src="js/api.js?v=111"></script>
-<script src="js/app.js?v=111"></script>
+<script src="js/config.js?v=112"></script>
+<script src="js/kpis.js?v=112"></script>
+<script src="js/cache.js?v=112"></script>
+<script src="js/api.js?v=112"></script>
+<script src="js/app.js?v=112"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */
