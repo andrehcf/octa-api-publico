@@ -13,6 +13,7 @@
   const estado = {
     dados: null,
     perfil: null,      // {is_gestor, agent_id, agent_name, email} — define gestão vs analista
+    metricaDia: "volume",   // indicador plotado no card "Indicadores por dia"
     preset: PRESET_PADRAO,  // hoje | ontem | semana (dom→hoje) | semana-passada (dom–sáb fechada)
                        // | mes (dia 1→hoje) | mes-passado (mês fechado) — âncora = hoje (BRT)
     range: null,       // {inicio, fim} quando período personalizado ativo
@@ -125,7 +126,10 @@
   // A cor do texto vem da luminância da própria barra, senão some no violeta escuro.
   const rotuloDentroBarra = {
     id: "rotuloDentroBarra",
-    afterDatasetsDraw(chart) {
+    // `options.plugins.rotuloDentroBarra.fmt` troca a formatação (p/ duração ou %); sem ela,
+    // número inteiro — que é o que os histogramas de peso/serviço esperam.
+    afterDatasetsDraw(chart, _args, opcoes) {
+      const fmt = (opcoes && opcoes.fmt) || ((v) => Math.round(v).toLocaleString("pt-BR"));
       const ctx = chart.ctx;
       const corFora = getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#e6ebf5";
       const claro = (hex) => {
@@ -147,7 +151,7 @@
           const cabe = (bar.base - bar.y) >= 16;
           ctx.fillStyle = cabe ? dentro : corFora;
           ctx.textBaseline = cabe ? "top" : "bottom";
-          ctx.fillText(Math.round(v).toLocaleString("pt-BR"), bar.x, cabe ? bar.y + 4 : bar.y - 3);
+          ctx.fillText(fmt(v), bar.x, cabe ? bar.y + 4 : bar.y - 3);
         });
       });
       ctx.restore();
@@ -265,47 +269,6 @@
       ctx.font = "600 10px system-ui, -apple-system, sans-serif";
       ctx.textBaseline = "top";
       ctx.fillText((opcoes && opcoes.rotulo) || "total", arco.x, arco.y + 5);
-      ctx.restore();
-    },
-  };
-
-  // Pilha de métricas DENTRO da coluna (card "Acionamentos por dia"). Cada barra recebe várias
-  // linhas de texto empilhadas de baixo p/ cima, a partir do eixo: volume no topo da pilha,
-  // indicadores abaixo. A cor é decidida LINHA A LINHA — se aquela altura cai dentro da barra,
-  // texto escuro sobre o azul; se já passou do topo da barra (dia de volume baixo), texto claro
-  // sobre o fundo do card. É o que permite mostrar os 7 números mesmo na barra de 89.
-  // `options.plugins.rotuloColunaDia.linhas[i]` = array de strings daquela coluna.
-  const rotuloColunaDia = {
-    id: "rotuloColunaDia",
-    afterDatasetsDraw(chart, _args, opcoes) {
-      const porColuna = (opcoes && opcoes.linhas) || [];
-      const meta = chart.getDatasetMeta(0);
-      if (!meta || !meta.data || !porColuna.length) return;
-      const raiz = getComputedStyle(document.documentElement);
-      const corClara = raiz.getPropertyValue("--text").trim() || "#e6ebf5";
-      // Mesma regra de luminância dos outros plugins: barra clara pede texto escuro, barra
-      // escura pede branco. A barra azul (#4f7cf7) é escura — texto escuro nela não se lê.
-      const hex = String((chart.data.datasets[0] || {}).backgroundColor || "").replace("#", "");
-      const lum = hex.length === 6
-        ? 0.299 * parseInt(hex.slice(0, 2), 16) + 0.587 * parseInt(hex.slice(2, 4), 16)
-          + 0.114 * parseInt(hex.slice(4, 6), 16)
-        : 0;
-      const corDentro = lum > 150 ? "#0a0f1e" : "#ffffff";
-      const ctx = chart.ctx;
-      ctx.save();
-      ctx.textAlign = "center";
-      ctx.textBaseline = "bottom";
-      meta.data.forEach((bar, i) => {
-        const txts = porColuna[i] || [];
-        let y = bar.base - 7;                       // começa logo acima do eixo
-        for (let j = txts.length - 1; j >= 0; j--) {  // de baixo p/ cima: txts[0] fica no topo
-          ctx.font = j === 0 ? "700 13px system-ui, -apple-system, sans-serif"
-                             : "600 11px system-ui, -apple-system, sans-serif";
-          ctx.fillStyle = (y - 3 > bar.y) ? corDentro : corClara;   // dentro da barra?
-          ctx.fillText(txts[j], bar.x, y);
-          y -= (j === 0 ? 17 : 14);
-        }
-      });
       ctx.restore();
     },
   };
@@ -460,6 +423,26 @@
   // `linhas` que os KPIs já usam (agg_chats_dia em memória) — zero consulta nova e segue o
   // filtro de fila/tag/origem de graça.
   const DIAS_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+  // Um indicador por vez (abas no topo do card). `val` recebe o retorno de KPIS.kpisChats do dia,
+  // então as barras seguem as MESMAS fórmulas dos cards do topo. Cores = as dos KPI cards.
+  // Duração é plotada em MINUTOS (número comparável) e rotulada com fmtDuracao.
+  const METRICAS_DIA = {
+    volume:      { rot: "Acionamentos", cor: "#4f7cf7", suf: "",
+                   val: (k) => k.volume, fmt: (v) => KPIS.fmtInt(v) },
+    tme:         { rot: "TME", cor: "#22d3ee", suf: "min",
+                   val: (k) => (k.tmeSeg == null ? null : k.tmeSeg / 60), fmt: (v) => KPIS.fmtDuracao(v * 60) },
+    tma:         { rot: "TMA", cor: "#14b8a6", suf: "min",
+                   val: (k) => (k.tmaSeg == null ? null : k.tmaSeg / 60), fmt: (v) => KPIS.fmtDuracao(v * 60) },
+    abandono:    { rot: "Abandono", cor: "#f87171", suf: "%",
+                   val: (k) => k.abandonoPct, fmt: (v) => KPIS.fmtPct(v) },
+    engajamento: { rot: "Engajamento", cor: "#a78bfa", suf: "%",
+                   val: (k) => k.engajamentoPct, fmt: (v) => KPIS.fmtPct(v) },
+    csat:        { rot: "CSAT", cor: "#34d399", suf: "%",
+                   val: (k) => k.csatPct, fmt: (v) => KPIS.fmtPct(v) },
+    resolvidos:  { rot: "Resolvidos", cor: "#818cf8", suf: "%",
+                   val: (k) => k.resolvidosPct, fmt: (v) => KPIS.fmtPct(v) },
+  };
+  let dadosVolumeDia = null;   // último {linhas, p} — p/ redesenhar ao trocar de indicador
   function renderVolumeDia(linhas, p) {
     const grid = $("gridVolumeDia");
     if (!grid) return;
@@ -482,32 +465,23 @@
       d.setUTCDate(d.getUTCDate() + 1);
     }
 
-    const total = dias.reduce((a, x) => a + x.v, 0);
+    dadosVolumeDia = { linhas, p };   // p/ o clique nas abas redesenhar sem ir ao banco
+    const mSub = METRICAS_DIA[estado.metricaDia] || METRICAS_DIA.volume;
+    const kSemana = KPIS.kpisChats(dias.map((x) => x.row).filter(Boolean));
+    const vSemana = mSub.val(kSemana);
     const sub = $("subVolumeDia");
     if (sub) sub.textContent = dias.length
       ? `${KPIS.fmtDiaCurto(dias[0].iso)} a ${KPIS.fmtDiaCurto(dias[dias.length - 1].iso)}`
-        + ` · ${KPIS.fmtInt(total)} acionamentos · ${filaLabel(estado.filaAplicada)}`
+        + ` · ${mSub.rot} no período: ${vSemana == null ? "—" : mSub.fmt(vSemana)}`
+        + ` · ${filaLabel(estado.filaAplicada)}`
       : "Sem dias no período";
 
     // ~110px por rótulo é o que "Domingo - 11/10" ocupa a 11px; abaixo disso, 2 linhas.
     const larguraCanvas = (($("chartVolumeDia") || {}).parentElement || {}).clientWidth || 0;
     const umaLinha = larguraCanvas >= dias.length * 110;
 
-    // Métricas de cada dia, para a pilha dentro da coluna. Saem de KPIS.kpisChats([linha]),
-    // a MESMA função dos cards do topo — por construção não divergem dos KPIs do período.
-    // Em coluna estreita (mobile) só o volume sobrevive: 7 linhas de texto não caberiam.
-    const larguraColuna = larguraCanvas / Math.max(dias.length, 1);
-    const cabeMetricas = larguraColuna >= 88;
-    const pilhas = dias.map((x) => {
-      const n = [KPIS.fmtInt(x.v)];
-      if (!cabeMetricas || !x.row) return n;
-      const k = KPIS.kpisChats([x.row]);
-      const pct = (v) => (v == null ? "—" : KPIS.fmtPct(v));
-      const dur = (v) => (v == null ? "—" : KPIS.fmtDuracao(v));
-      n.push(`TME ${dur(k.tmeSeg)}`, `TMA ${dur(k.tmaSeg)}`, `Aband. ${pct(k.abandonoPct)}`,
-             `Engaj. ${pct(k.engajamentoPct)}`, `CSAT ${pct(k.csatPct)}`, `Resol. ${pct(k.resolvidosPct)}`);
-      return n;
-    });
+    const m = METRICAS_DIA[estado.metricaDia] || METRICAS_DIA.volume;
+    const valores = dias.map((x) => (x.row ? m.val(KPIS.kpisChats([x.row])) : null));
 
     novoChart("chartVolumeDia", {
       type: "bar",
@@ -517,16 +491,17 @@
         labels: dias.map((x) => (umaLinha
           ? `${DIAS_SEMANA[x.dow]} - ${KPIS.fmtDiaCurto(x.iso)}`
           : [DIAS_SEMANA[x.dow], KPIS.fmtDiaCurto(x.iso)])),
-        datasets: [{ data: dias.map((x) => x.v), backgroundColor: "#4f7cf7",
+        datasets: [{ data: valores, backgroundColor: m.cor,
                      borderRadius: 7, borderSkipped: false, maxBarThickness: 64 }],
       },
       options: (() => {
-        // grace alto: a pilha de 7 linhas precisa de espaço acima da barra mais baixa.
-        const o = opts({ y: { beginAtZero: true, grace: cabeMetricas ? "45%" : "12%" } });
-        o.plugins.rotuloColunaDia = { linhas: pilhas };
+        const o = opts({ y: { beginAtZero: true, grace: "12%",
+          ticks: { callback: (v) => `${KPIS.fmtInt(Math.round(v))}${m.suf}` } } });
+        o.plugins.rotuloDentroBarra = { fmt: m.fmt };   // rótulo na unidade do indicador
+        o.plugins.tooltip = { callbacks: { label: (c) => ` ${m.rot}: ${m.fmt(c.parsed.y)}` } };
         return o;
       })(),
-      plugins: [rotuloColunaDia],
+      plugins: [rotuloDentroBarra],
     });
   }
 
@@ -3094,6 +3069,16 @@
   // Clique fora de qualquer seletor multi da barra fecha os três.
   document.addEventListener("click", (e) => {
     if (!e.target.closest("#filaMulti,#tagMulti,#origemMulti")) MULTI_DIMS.forEach(fecharMulti);
+  });
+  // Abas de indicador do card "Indicadores por dia": redesenha só este gráfico, com o dado
+  // que já está na memória (nada de render() inteiro, que dispararia as RPCs da seção).
+  $("metricaDiaTabs").addEventListener("click", (e) => {
+    const b = e.target.closest(".tab");
+    if (!b) return;
+    document.querySelectorAll("#metricaDiaTabs .tab").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    estado.metricaDia = b.dataset.metrica;
+    if (dadosVolumeDia) renderVolumeDia(dadosVolumeDia.linhas, dadosVolumeDia.p);
   });
   $("segAplicar").addEventListener("click", aplicarSeg);
   $("segLimpar").addEventListener("click", limparSeg);

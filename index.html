@@ -183,13 +183,22 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <div class="card-title">Acionamentos por dia
-              <span class="kpi-info" tabindex="0" data-tip="<b>Quantos atendimentos entraram em cada dia da semana selecionada</b>, de domingo a sábado. É o mesmo <b>volume atendido</b> do KPI lá de cima, só que aberto por dia — e segue o filtro de fila/tag/origem.<br><br>Serve para achar o <b>dia atípico</b>: queda forte numa segunda costuma ser feriado, e o pico no dia seguinte é o acúmulo voltando. Fim de semana é naturalmente baixo (plantão), então compare sábado com sábado, não com quarta.<br><br>Dentro de cada coluna vêm, além do volume, os <b>mesmos indicadores dos cards do topo</b> (TME, TMA, abandono, engajamento, CSAT e resolvidos) calculados só com aquele dia — mesma conta, recorte menor.<br><br>Em <b>Essa semana</b> aparecem só os dias já decorridos — dia que ainda não aconteceu não vira barra zerada. O card <b>só existe nos filtros de semana</b>; em Hoje/Ontem seria uma barra só, e em Mês ainda está para ser decidido.">i</span>
+            <div class="card-title">Indicadores por dia
+              <span class="kpi-info" tabindex="0" data-tip="<b>Quantos atendimentos entraram em cada dia da semana selecionada</b>, de domingo a sábado. É o mesmo <b>volume atendido</b> do KPI lá de cima, só que aberto por dia — e segue o filtro de fila/tag/origem.<br><br>Serve para achar o <b>dia atípico</b>: queda forte numa segunda costuma ser feriado, e o pico no dia seguinte é o acúmulo voltando. Fim de semana é naturalmente baixo (plantão), então compare sábado com sábado, não com quarta.<br><br>Os botões em cima trocam o indicador plotado: <b>acionamentos, TME, TMA, abandono, engajamento, CSAT e resolvidos</b>, cada um calculado só com aquele dia pela <b>mesma conta dos cards do topo</b>. A troca é instantânea — o dado do período inteiro já está na memória, não há nova consulta ao banco.<br><br>Em <b>Essa semana</b> aparecem só os dias já decorridos — dia que ainda não aconteceu não vira barra zerada. O card <b>só existe nos filtros de semana</b>; em Hoje/Ontem seria uma barra só, e em Mês ainda está para ser decidido.">i</span>
             </div>
             <div class="card-subtitle" id="subVolumeDia">Domingo a sábado da semana selecionada</div>
           </div>
+          <div class="tab-group" id="metricaDiaTabs" title="Escolha o indicador — o gráfico recarrega na hora, sem ir ao banco">
+            <button class="tab active" data-metrica="volume">Acionamentos</button>
+            <button class="tab" data-metrica="tme">TME</button>
+            <button class="tab" data-metrica="tma">TMA</button>
+            <button class="tab" data-metrica="abandono">Abandono</button>
+            <button class="tab" data-metrica="engajamento">Engajamento</button>
+            <button class="tab" data-metrica="csat">CSAT</button>
+            <button class="tab" data-metrica="resolvidos">Resolvidos</button>
+          </div>
         </div>
-        <div class="chart-wrap xtall"><canvas id="chartVolumeDia"></canvas></div>
+        <div class="chart-wrap tall"><canvas id="chartVolumeDia"></canvas></div>
       </div>
     </div>
 
@@ -922,11 +931,11 @@
   </div>
 </div>
 
-<script src="js/config.js?v=109"></script>
-<script src="js/kpis.js?v=109"></script>
-<script src="js/cache.js?v=109"></script>
-<script src="js/api.js?v=109"></script>
-<script src="js/app.js?v=109"></script>
+<script src="js/config.js?v=110"></script>
+<script src="js/kpis.js?v=110"></script>
+<script src="js/cache.js?v=110"></script>
+<script src="js/api.js?v=110"></script>
+<script src="js/app.js?v=110"></script>
 <script>
   /* Alternador de tema — escreve data-theme no <html>, persiste em localStorage
      e avisa o app (onThemeChange) para re-renderizar os gráficos. */
