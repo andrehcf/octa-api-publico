@@ -427,13 +427,17 @@
     grid.hidden = !porSemana;
     if (!porSemana) return;
 
-    const porDia = new Map(linhas.map((r) => [r.dia, Number(r.volume_atendido) || 0]));
+    // Guarda a LINHA inteira do dia (não só o volume): a tabela abaixo do gráfico reaproveita
+    // KPIS.kpisChats([linha]) para cada dia, que é a mesma fórmula dos cards do topo — assim
+    // TME/TMA/abandono/CSAT por dia nunca divergem do KPI do período.
+    const porDia = new Map(linhas.map((r) => [r.dia, r]));
     const dias = [];
     const d = new Date(p.inicio + "T00:00:00Z");
     for (let i = 0; i < 7; i++) {
       const iso = d.toISOString().slice(0, 10);
       if (iso > p.fim) break;   // "Essa semana": dia que ainda não chegou não vira barra zerada
-      dias.push({ iso, dow: d.getUTCDay(), v: porDia.get(iso) || 0 });
+      const row = porDia.get(iso) || null;
+      dias.push({ iso, dow: d.getUTCDay(), row, v: Number(row && row.volume_atendido) || 0 });
       d.setUTCDate(d.getUTCDate() + 1);
     }
 
@@ -443,6 +447,32 @@
       ? `${KPIS.fmtDiaCurto(dias[0].iso)} a ${KPIS.fmtDiaCurto(dias[dias.length - 1].iso)}`
         + ` · ${KPIS.fmtInt(total)} acionamentos · ${filaLabel(estado.filaAplicada)}`
       : "Sem dias no período";
+
+    // Tabela dia a dia com os MESMOS indicadores dos cards do topo (dia sem linha = "—").
+    const tbody = $("tabelaVolumeDia") && $("tabelaVolumeDia").querySelector("tbody");
+    if (tbody) {
+      const pct = (v) => (v == null ? "—" : KPIS.fmtPct(v));
+      const dur = (v) => (v == null ? "—" : KPIS.fmtDuracao(v));
+      const celulas = (k) => `
+        <td class="num">${dur(k.tmeSeg)}</td>
+        <td class="num">${dur(k.tmaSeg)}</td>
+        <td class="num">${pct(k.abandonoPct)}</td>
+        <td class="num">${pct(k.engajamentoPct)}</td>
+        <td class="num">${pct(k.csatPct)}</td>
+        <td class="num">${pct(k.resolvidosPct)}</td>`;
+      const corpo = dias.map((x) => {
+        const k = x.row ? KPIS.kpisChats([x.row]) : null;
+        return `<tr>
+          <td>${DIAS_SEMANA[x.dow]} · ${KPIS.fmtDiaCurto(x.iso)}</td>
+          <td class="num">${KPIS.fmtInt(x.v)}</td>
+          ${k ? celulas(k) : '<td class="num">—</td>'.repeat(6)}
+        </tr>`;
+      }).join("");
+      // Fechamento da semana: mesma conta sobre todas as linhas (= os cards do topo).
+      const kTudo = KPIS.kpisChats(dias.map((x) => x.row).filter(Boolean));
+      tbody.innerHTML = corpo
+        + `<tr class="linha-ref"><td>Semana</td><td class="num">${KPIS.fmtInt(total)}</td>${celulas(kTudo)}</tr>`;
+    }
 
     // ~110px por rótulo é o que "Domingo - 11/10" ocupa a 11px; abaixo disso, 2 linhas.
     const larguraCanvas = (($("chartVolumeDia") || {}).parentElement || {}).clientWidth || 0;
