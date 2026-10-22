@@ -30,6 +30,7 @@
     rankingView: "fila",                         // "fila" (2 categorias) | "geral" (todo o Suporte)
     catView: "geral",                            // Por Categoria: "geral" (todas) | "fila" (Est+Conv / Especializado)
     rankingRows: [],                             // analistas agregados do período (p/ re-ordenar/exportar)
+    rankingPorTime: {},                          // {est_conv:[], especializado:[]} já ordenados e sem quem ficou fora do piso
     // seleção PENDENTE dos filtros de tickets (servicos/pesos = campos personalizados do Octadesk)
     tkt: { forms: [], statuses: [], analistas: [], servicos: [], pesos: [], issue: "todos", porFechamento: false },
     // filtros de fato aplicados (a query usa este)
@@ -1789,9 +1790,24 @@
 
   // ══════════════ RANKING ══════════════
 
+  // Suporte Estrutural+Convencional e Suporte Especializado são times distintos, com top
+  // performance próprio: o universo do ranking é o TIME, não o Suporte inteiro.
+  const TIME_LABEL = {
+    est_conv: "Suporte Estrutural + Convencional",
+    especializado: "Suporte Especializado",
+  };
+
+  // Mediana de uma lista de números (base do piso de volume). Lista vazia → 0 (sem piso).
+  function mediana(nums) {
+    if (!nums.length) return 0;
+    const v = [...nums].sort((a, b) => a - b);
+    const m = v.length >> 1;
+    return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+  }
+
   // Modo analista: em vez do ranking de todos (dado da equipe, escondido por RLS),
-  // mostra só a POSIÇÃO do próprio analista NO PERÍODO do filtro de data (via
-  // meu_ranking_periodo — calcula o rank de todos server-side, devolve só a linha dele).
+  // mostra só a POSIÇÃO do próprio analista NO PERÍODO do filtro de data, DENTRO do time
+  // dele (via meu_ranking_periodo — ranqueia server-side, devolve só a linha dele).
   async function renderRankingAnalista() {
     $("btnExportRanking").style.display = "none";   // exportar/ordenar é só na visão da gestão
     const p = periodo();
@@ -1805,17 +1821,26 @@
     const per = `${KPIS.fmtDiaCurto(p.inicio)} a ${KPIS.fmtDiaCurto(p.fim)}`;
     let r;
     try {
-      r = await API.meuRankingPeriodo(p.inicio, p.fim, CONFIG.PESOS, CONFIG.TMA_LIMITE_MIN);
+      r = await API.meuRankingPeriodo(p.inicio, p.fim, CONFIG.PESOS, CONFIG.TMA_LIMITE_MIN,
+                                      CONFIG.RANKING_PISO_FRAC);
     } catch (e) { console.error(e); return; }
     if (!r) {
       if (sub) sub.textContent = `Sem dados · ${per}`;
       tbody.innerHTML = `<tr><td colspan="8" class="empty-note">Sem dados no período</td></tr>`;
       return;
     }
-    if (sub) sub.textContent = `Sua posição: #${r.posicao} de ${r.total} · ${per}`;
+    // Sem posição = volume abaixo do piso do time. Ele continua vendo as próprias métricas
+    // (a RPC devolve a linha), só não recebe um lugar no ranking.
+    const time = TIME_LABEL[r.time_slug] || "Suporte";
+    const posicionado = r.posicao != null;
+    if (sub) sub.textContent = posicionado
+      ? `Sua posição: #${r.posicao} de ${r.total} · ${time} · ${per}`
+      : `Sem posição no período (volume abaixo do mínimo do time) · ${time} · ${per}`;
     tbody.innerHTML = `
       <tr>
-        <td><span class="pos-badge ${r.posicao <= 3 ? "top" + r.posicao : ""}">${r.posicao}</span></td>
+        <td>${posicionado
+          ? `<span class="pos-badge ${r.posicao <= 3 ? "top" + r.posicao : ""}">${r.posicao}</span>`
+          : "—"}</td>
         <td>${esc(r.agent_name || "Você")}</td>
         <td class="num">${KPIS.fmtInt(r.volume)}</td>
         <td class="num">${KPIS.fmtPct(r.participacao_pct)}</td>
@@ -1865,7 +1890,6 @@
     }
 
     const linhas = [...porAgente.values()];
-    const totalVolume = linhas.reduce((s, a) => s + a.volume, 0) || 1;
 
     // Bucket por categoria de fila: soma o volume por (agent, categoria) no período;
     // o analista entra na categoria de MAIOR volume (foco = % do volume nessa categoria).
@@ -1883,13 +1907,11 @@
         id: r.id,
         nome: r.nome,
         volume: r.volume,
-        participacaoPct: 100 * r.volume / totalVolume,
         engajamentoPct: r.volume > 0 ? 100 * r.csat_respondidos / r.volume : null,
         csatPct: r.csat_respondidos > 0 ? (r.csat_soma_score / r.csat_respondidos) / 5 * 100 : null,
         resolvidosPct: r.resolvidos_total > 0 ? 100 * r.resolvidos_sim / r.resolvidos_total : null,
         tmaMin,
       };
-      a.score = KPIS.scoreRanking(a, CONFIG.PESOS, CONFIG.TMA_LIMITE_MIN);
       const f = filaPorAgente.get(r.id) || { est_conv: 0, especializado: 0 };
       const totalCat = f.est_conv + f.especializado;
       a.categoria = totalCat === 0 ? "outros"
@@ -1897,28 +1919,68 @@
       a.focoPct = totalCat ? 100 * Math.max(f.est_conv, f.especializado) / totalCat : null;
       return a;
     });
+    // Segundo passo: piso de volume por time + participação/score (por time e no Geral).
+    aplicarMetricasRanking(estado.rankingRows);
     $("btnExportRanking").style.display = "";   // gestão pode exportar a lista
     pintarRanking();
   }
 
+  // Espelha, no cliente, o que a RPC meu_ranking_periodo faz server-side: cada analista é
+  // medido contra o PRÓPRIO time (categoria de fila dominante; "outros" conta como Est+Conv,
+  // a mesma tabela em que ele é pintado), e quem não atinge o piso de volume do time
+  // (RANKING_PISO_FRAC × mediana) sai do ranking — sem o piso, quem atendeu 1-9 chats com
+  // CSAT perfeito ocupa o topo, porque CSAT+Resolvidos valem 5 dos 11 pontos de peso.
+  // O piso vale também para a tabela "Geral": ela ranqueia os dois times juntos, mas um
+  // analista de 1 chat no topo dela seria o mesmo defeito com outro rótulo.
+  function aplicarMetricasRanking(rows) {
+    const porTime = new Map();
+    for (const a of rows) {
+      a.time = a.categoria === "especializado" ? "especializado" : "est_conv";
+      if (!porTime.has(a.time)) porTime.set(a.time, []);
+      porTime.get(a.time).push(a);
+    }
+    for (const membros of porTime.values()) {
+      const piso = mediana(membros.map((a) => a.volume)) * (CONFIG.RANKING_PISO_FRAC || 0);
+      // Denominador da participação = volume do time, só de quem passou do piso.
+      const totalTime = membros.reduce((s, a) => s + (a.volume >= piso ? a.volume : 0), 0) || 1;
+      for (const a of membros) {
+        a.elegivel = a.volume >= piso;
+        a.participacaoPctTime = a.elegivel ? 100 * a.volume / totalTime : null;
+        a.scoreTime = KPIS.scoreRanking({ ...a, participacaoPct: a.participacaoPctTime },
+                                        CONFIG.PESOS, CONFIG.TMA_LIMITE_MIN);
+      }
+    }
+    // Geral = todo o Suporte: mesma fórmula, mas participação contra os dois times somados.
+    const totalGeral = rows.reduce((s, a) => s + (a.elegivel ? a.volume : 0), 0) || 1;
+    for (const a of rows) {
+      a.participacaoPctGeral = a.elegivel ? 100 * a.volume / totalGeral : null;
+      a.scoreGeral = KPIS.scoreRanking({ ...a, participacaoPct: a.participacaoPctGeral },
+                                       CONFIG.PESOS, CONFIG.TMA_LIMITE_MIN);
+    }
+  }
+
   // Colunas ordenáveis: data-col do <th> → valor + tipo (nulos vão sempre p/ o fim).
+  // `campos` diz de onde saem score/participação: a tabela Geral usa os números do Suporte
+  // inteiro; as tabelas por time usam os recalculados dentro do time.
+  const CAMPOS_GERAL = { score: "scoreGeral", part: "participacaoPctGeral" };
+  const CAMPOS_TIME  = { score: "scoreTime",  part: "participacaoPctTime" };
   const RANKING_COLS = {
     nome:         { get: (a) => a.nome,            tipo: "txt" },
-    score:        { get: (a) => a.score,           tipo: "num" },
+    score:        { get: (a, c) => a[c.score],     tipo: "num" },
     volume:       { get: (a) => a.volume,          tipo: "num" },
-    participacao: { get: (a) => a.participacaoPct, tipo: "num" },
+    participacao: { get: (a, c) => a[c.part],      tipo: "num" },
     engajamento:  { get: (a) => a.engajamentoPct,  tipo: "num" },
     csat:         { get: (a) => a.csatPct,         tipo: "num" },
     resolvidos:   { get: (a) => a.resolvidosPct,   tipo: "num" },
     tma:          { get: (a) => a.tmaMin,          tipo: "num" },
   };
 
-  function ordenarRanking(rows) {
+  function ordenarRanking(rows, campos) {
     const { col, dir } = estado.rankingSort;
     const def = RANKING_COLS[col] || RANKING_COLS.score;
     const mul = dir === "asc" ? 1 : -1;
     return [...rows].sort((a, b) => {
-      const va = def.get(a), vb = def.get(b);
+      const va = def.get(a, campos), vb = def.get(b, campos);
       if (va == null && vb == null) return 0;
       if (va == null) return 1;      // nulo sempre por último, independente da direção
       if (vb == null) return -1;
@@ -1934,15 +1996,25 @@
     return ` <span class="foco-badge ${cls}" title="Foco na fila: ${KPIS.fmtPct(pct)} do volume do analista nesta categoria">${KPIS.fmtPct(pct, 0)}</span>`;
   }
 
-  // (Re)desenha o ranking da gestão: "Geral" (todo o Suporte) + dois grupos por categoria de fila.
+  // (Re)desenha o ranking da gestão: "Geral" (todo o Suporte) + um ranking por time.
   function pintarRanking() {
-    const rows = ordenarRanking(estado.rankingRows);
-    estado.rankingSorted = rows;   // ordem exibida → a exportação bate com a tela
+    const geral = ordenarRanking(estado.rankingRows.filter((a) => a.elegivel), CAMPOS_GERAL);
+    estado.rankingSorted = geral;   // ordem exibida → a exportação bate com a tela
     // Geral = todo o Suporte (todas as filas), sem badge de foco.
-    pintarGrupoRanking("tabelaRankingGeral", "subRankingGeral", rows, false);
-    // Por fila: "outros" (analista sem volume nas 2 categorias — raríssimo) fica junto de Est+Conv.
-    pintarGrupoRanking("tabelaRankingA", "subRankingA", rows.filter((a) => a.categoria !== "especializado"), true);
-    pintarGrupoRanking("tabelaRankingB", "subRankingB", rows.filter((a) => a.categoria === "especializado"), true);
+    pintarGrupoRanking("tabelaRankingGeral", "subRankingGeral", geral, false, CAMPOS_GERAL,
+                       estado.rankingRows.length - geral.length);
+    // Por time: ranking próprio de cada um, só com quem passou do piso de volume.
+    // "outros" (analista sem volume nas 2 categorias — raríssimo) conta como Est+Conv.
+    estado.rankingPorTime = {};
+    for (const [time, tabelaId, subId] of [
+      ["est_conv", "tabelaRankingA", "subRankingA"],
+      ["especializado", "tabelaRankingB", "subRankingB"],
+    ]) {
+      const membros = estado.rankingRows.filter((a) => a.time === time);
+      const rows = ordenarRanking(membros.filter((a) => a.elegivel), CAMPOS_TIME);
+      estado.rankingPorTime[time] = rows;
+      pintarGrupoRanking(tabelaId, subId, rows, true, CAMPOS_TIME, membros.length - rows.length);
+    }
 
     document.querySelectorAll("#sec-ranking .ranking-tabela thead th[data-col]").forEach((th) => {
       const ativa = th.dataset.col === estado.rankingSort.col;
@@ -1951,14 +2023,14 @@
     });
   }
 
-  function pintarGrupoRanking(tabelaId, subId, rows, comFoco) {
+  function pintarGrupoRanking(tabelaId, subId, rows, comFoco, campos, fora) {
     const ehRankScore = estado.rankingSort.col === "score" && estado.rankingSort.dir === "desc";
     $(tabelaId).querySelector("tbody").innerHTML = rows.map((a, i) => `
       <tr>
         <td><span class="pos-badge ${ehRankScore && i < 3 ? "top" + (i + 1) : ""}">${i + 1}</span></td>
         <td>${esc(a.nome)}${comFoco ? focoBadge(a.focoPct) : ""}</td>
         <td class="num">${KPIS.fmtInt(a.volume)}</td>
-        <td class="num">${KPIS.fmtPct(a.participacaoPct)}</td>
+        <td class="num">${KPIS.fmtPct(a[campos.part])}</td>
         <td class="num">${KPIS.fmtPct(a.engajamentoPct)}</td>
         <td class="num">${KPIS.fmtPct(a.csatPct)}</td>
         <td class="num">${KPIS.fmtPct(a.resolvidosPct)}</td>
@@ -1967,7 +2039,9 @@
     const sub = $(subId);
     if (sub) {
       const vol = rows.reduce((s, a) => s + (a.volume || 0), 0);
-      sub.textContent = `${rows.length} analista${rows.length === 1 ? "" : "s"} · ${KPIS.fmtInt(vol)} atend.`;
+      // O corte pelo piso é dito em voz alta: sumir com analista sem explicação vira pergunta.
+      sub.textContent = `${rows.length} analista${rows.length === 1 ? "" : "s"} · ${KPIS.fmtInt(vol)} atend.`
+        + (fora ? ` · ${fora} fora do ranking (volume abaixo do mínimo)` : "");
     }
   }
 
@@ -3313,15 +3387,17 @@
       // Geral: lista corrida de todo o Suporte (a categoria vai só como referência).
       sorted.forEach((a, i) => linhas.push([
         catLabel[a.categoria] || "—", i + 1, a.nome, num2(a.focoPct), a.volume,
-        num2(a.participacaoPct), num2(a.engajamentoPct),
+        num2(a.participacaoPctGeral), num2(a.engajamentoPct),
         num2(a.csatPct), num2(a.resolvidosPct), num1(a.tmaMin),
       ]));
     } else {
-      [["Fila estendido + convencional", sorted.filter((a) => a.categoria !== "especializado")],
-       ["Fila Especializado", sorted.filter((a) => a.categoria === "especializado")],
+      // Por time: os mesmos conjuntos já ordenados pela tela (sem quem ficou fora do piso).
+      const porTime = estado.rankingPorTime || {};
+      [["Fila estendido + convencional", porTime.est_conv || []],
+       ["Fila Especializado", porTime.especializado || []],
       ].forEach(([cat, grupo]) => grupo.forEach((a, i) => linhas.push([
         cat, i + 1, a.nome, num2(a.focoPct), a.volume,
-        num2(a.participacaoPct), num2(a.engajamentoPct),
+        num2(a.participacaoPctTime), num2(a.engajamentoPct),
         num2(a.csatPct), num2(a.resolvidosPct), num1(a.tmaMin),
       ])));
     }

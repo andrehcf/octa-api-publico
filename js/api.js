@@ -163,12 +163,14 @@ const API = (() => {
       return data || [];
     });
   }
-  // Posição do analista no ranking do mês (só a linha dele; pesos = os do front).
-  function meuRankingPeriodo(ini, fim, pesos, tmaLimiteMin) {
+  // Posição do analista no ranking do PERÍODO, dentro do time dele (só a linha dele;
+  // pesos + piso = os do front). Fora do piso: volta com posicao/total nulos.
+  function meuRankingPeriodo(ini, fim, pesos, tmaLimiteMin, pisoFrac) {
     const params = {
       p_ini: ini, p_fim: fim,
       p_w_volume: pesos.volume, p_w_eng: pesos.engajamento, p_w_csat: pesos.csat,
       p_w_resolv: pesos.resolvidos, p_w_tma: pesos.tma, p_tma_limite_min: tmaLimiteMin,
+      p_piso_frac: pisoFrac,
     };
     return comCache("meu_ranking_periodo", params, async () => {
       const { data, error } = await cliente.rpc("meu_ranking_periodo", params);
