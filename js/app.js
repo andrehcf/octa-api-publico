@@ -712,10 +712,16 @@
     especializado: ["canais", "canais-plantao", "dd", "dd-plantao", "enterprise", "enterprise-plantao"],
   };
 
+  // Rótulo da categoria = CAMINHO completo ("PDV / Frente de Caixa > Hardware > TEF /
+  // Pinpad > Erro pin pad/TEF"), mesma régua do octa-api: o nome final sozinho junta ramos
+  // diferentes ("Configuração" existe em PDV e em ERP) numa linha só. O fallback cobre
+  // resposta antiga ainda no cache do navegador, de antes da coluna existir.
+  const catRotulo = (c) => c.categoria_path || c.categoria_nome;
+
   // membrosOverride: usa filas explícitas (visão "Por fila") em vez do filtro global.
   // Colunas ordenáveis de "Por Categoria". Mesma mecânica do ranking e do top de assuntos.
   const CAT_COLS = {
-    categoria:   { get: (c) => c.categoria_nome, tipo: "txt" },
+    categoria:   { get: (c) => catRotulo(c), tipo: "txt" },
     volume:      { get: (c) => c.volume },
     com_ticket:  { get: (c) => c.com_ticket },
     tma:         { get: (c) => (c.tma_n ? c.tma_soma_seg / c.tma_n : null) },
@@ -771,7 +777,7 @@
     tabela.querySelector("tbody").innerHTML = cats.map((c) => {
       const tma = c.tma_n ? c.tma_soma_seg / c.tma_n : null;
       return `<tr>
-        <td>${esc(c.categoria_nome)}</td>
+        <td>${esc(catRotulo(c))}</td>
         <td class="num">${KPIS.fmtInt(c.volume)}</td>
         ${comTicket ? `<td class="num">${KPIS.fmtInt(c.com_ticket)}</td>` : ""}
         <td class="num">${KPIS.fmtDuracao(tma)}</td>
