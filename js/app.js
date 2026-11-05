@@ -872,11 +872,14 @@
 
     const DOWS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
     let html = `<div class="hm-corner"></div>`
-      + hs.map((h) => `<div class="hm-hour">${h}h</div>`).join("");
+      + hs.map((h) => `<div class="hm-hour">${h}h</div>`).join("")
+      + `<div class="hm-hour hm-total-h">Total</div>`;
     for (const dia of dias) {
       html += `<div class="hm-dow"><b>${DOWS[dia.dow].slice(0, 3)}</b> ${KPIS.fmtDiaCurto(dia.iso)}</div>`;
+      let totalDia = 0;
       for (const h of hs) {
         const v = grade[dia.dow][h] || 0;
+        totalDia += v;
         if (!v) { html += `<div class="hm-cell"></div>`; continue; }
         const a = 0.12 + 0.88 * (v / (max || 1));
         html += `<div class="hm-cell cheia"`
@@ -884,11 +887,16 @@
           + ` style="background:rgba(${ACC.join(",")},${a.toFixed(2)});color:${corTexto(a)}"`
           + `>${KPIS.fmtInt(v)}</div>`;
       }
+      // Total do dia. Sem preenchimento de escala: ele é uma ordem de grandeza acima das
+      // células, e colorido na mesma régua deixaria todas elas com cara de vazias.
+      html += `<div class="hm-cell hm-total${totalDia ? "" : " vazio"}"`
+        + ` title="${DOWS[dia.dow]}, ${KPIS.fmtDiaCurto(dia.iso)} — ${KPIS.fmtInt(totalDia)} chats no dia"`
+        + `>${KPIS.fmtInt(totalDia)}</div>`;
     }
     const el = $("heatmap");
     if (el) {
       // Nº de colunas muda com as horas que tiveram movimento — por isso inline, não no CSS.
-      el.style.gridTemplateColumns = `78px repeat(${hs.length}, minmax(34px, 1fr))`;
+      el.style.gridTemplateColumns = `78px repeat(${hs.length}, minmax(34px, 1fr)) 52px`;
       el.innerHTML = html;
     }
     const sub = $("subDiaHora");

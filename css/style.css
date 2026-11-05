@@ -752,6 +752,20 @@ table.sortable thead th.sort-desc::after { content: "\2193"; opacity: .95; color
 }
 .heatmap .hm-cell:hover { outline: 1px solid var(--accent); }
 
+/* Coluna "Total" do heatmap: somatória do dia. Fica deliberadamente FORA da escala de cor
+   das células — o total é uma ordem de grandeza acima delas, e pintá-lo na mesma régua
+   faria toda a grade parecer vazia. A borda à esquerda separa do corpo do heatmap. */
+.heatmap .hm-total-h { color: var(--text); font-weight: 600; }
+.heatmap .hm-total {
+  background: transparent;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text); font-weight: 600;
+  padding-left: 6px; margin-left: 3px;
+}
+.heatmap .hm-total.vazio { color: var(--muted); font-weight: 400; }
+.heatmap .hm-total:hover { outline: none; color: var(--accent); }
+
 /* ══════ SEÇÕES ══════ */
 .section { display: none; }
 .section.active { display: block; }
