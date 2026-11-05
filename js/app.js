@@ -29,6 +29,7 @@
     catSort: { col: "volume", dir: "desc" },     // ordenação das tabelas de "Por Categoria"
     rankingView: "fila",                         // "fila" (2 categorias) | "geral" (todo o Suporte)
     catView: "geral",                            // Por Categoria: "geral" (todas) | "fila" (Est+Conv / Especializado)
+    mostrarEncerramentos: false,                 // preferência do navegador (localStorage), não vai pro banco
     rankingRows: [],                             // analistas agregados do período (p/ re-ordenar/exportar)
     rankingPorTime: {},                          // {est_conv:[], especializado:[]} já ordenados e sem quem ficou fora do piso
     // seleção PENDENTE dos filtros de tickets (servicos/pesos = campos personalizados do Octadesk)
@@ -700,10 +701,28 @@
   // Encerramentos automáticos (inatividade/abandono) continuam contando em TODAS as métricas
   // gerais — só são ocultados do top-10 da Performance (ocultar=true), onde poluiriam o "top
   // por volume". A seção "Por Categoria" (ocultar=false) mostra tudo.
-  const CATEGORIAS_OCULTAS = new Set([
-    "Encerramento - Inatividade / Sem Resposta",
-    "Encerramento - Abandono pelo Cliente",
-  ]);
+  // "Encerramento - ..." e "Sem resposta - Inatividade/Abandono" são DESFECHO, não assunto:
+  // o chat acabou sem o cliente responder. Entram no volume, mas poluem o top de categorias —
+  // "Encerramento - Inatividade / Sem Resposta" sozinho tem mais que o DOBRO do 2º colocado,
+  // então, visível, ele é sempre #1 e empurra um assunto real pra fora da lista.
+  // Prefixo (e não lista fixa) porque a taxonomia do Octadesk ganha nomes novos: o
+  // "Sem resposta - Inatividade/Abandono" é recente e escapava da lista antiga.
+  // Mesmo critério que a Reincidência já usa no sync (queries.py REINC_ENC_PREFIXO).
+  const ehEncerramento = (c) => {
+    const folha = (c.categoria_nome || "").trim();
+    return folha.startsWith("Encerramento -") || folha === "Sem resposta - Inatividade/Abandono";
+  };
+
+  // Mostrar ou não esses encerramentos é gosto de cada gestor, então vira preferência DO
+  // NAVEGADOR (localStorage), não dado: nada vai pro banco e some se o usuário limpar o
+  // navegador. Padrão = escondido. A leitura é defensiva — modo privativo/ITP pode lançar.
+  const PREF_ENC = "octa_mostrar_encerramentos";
+  function lerPrefEnc() {
+    try { return localStorage.getItem(PREF_ENC) === "1"; } catch (e) { return false; }
+  }
+  function salvarPrefEnc(v) {
+    try { localStorage.setItem(PREF_ENC, v ? "1" : "0"); } catch (e) {}
+  }
 
   // Grupos de fila da visão "Por fila" (mesmo mapeamento do ranking, ver sync/queries.py
   // CATEGORIAS_FILA): plantão soma na fila-mãe. São conjuntos disjuntos.
@@ -746,7 +765,7 @@
   // `comTicket`: a coluna "Virou ticket" (atendimentos daquela categoria que geraram ticket,
   // via v2_chat_tickets). Só as 3 tabelas de "Por Categoria" pedem — o card top-10 da
   // Performance fica com 5 colunas, senão aperta ao lado dos gráficos.
-  async function preencherCategorias(tabelaId, subId, limite, ocultar = false, membrosOverride = null,
+  async function preencherCategorias(tabelaId, subId, limite, membrosOverride = null,
                                      comTicket = false) {
     const tabela = $(tabelaId);
     if (!tabela) return;
@@ -764,7 +783,7 @@
     }
     if (meuSeq !== catSeq.get(tabelaId)) return;   // esta tabela teve nova chamada (filtro/período mudou)
     // Filtra ANTES do slice para não desperdiçar vaga do top com categoria oculta.
-    if (ocultar) cats = cats.filter((c) => !CATEGORIAS_OCULTAS.has(c.categoria_nome));
+    if (!estado.mostrarEncerramentos) cats = cats.filter((c) => !ehEncerramento(c));
     // Ordena ANTES de cortar: trocar a coluna troca QUAIS categorias aparecem, não só a ordem.
     // A RPC devolve até 250 (todas as do período), então o top sai do critério escolhido e não
     // só das maiores em volume. O card da Performance não é .sortable: mantém a ordem da RPC.
@@ -795,7 +814,7 @@
   }
 
   function renderCategoriasPerf() {
-    preencherCategorias("tabelaCategoriasP", "subCategoriasP", 10, true);
+    preencherCategorias("tabelaCategoriasP", "subCategoriasP", 10);
   }
 
   // ══════════════ DIA X HORA ══════════════
@@ -1787,10 +1806,10 @@
     const p = periodo();
     if (!p) return;
     if (porFila) {
-      preencherCategorias("tabelaCategoriasEC", "subCategoriasEC", 20, false, FILA_CATEGORIA.est_conv, true);
-      preencherCategorias("tabelaCategoriasESP", "subCategoriasESP", 20, false, FILA_CATEGORIA.especializado, true);
+      preencherCategorias("tabelaCategoriasEC", "subCategoriasEC", 20, FILA_CATEGORIA.est_conv, true);
+      preencherCategorias("tabelaCategoriasESP", "subCategoriasESP", 20, FILA_CATEGORIA.especializado, true);
     } else {
-      preencherCategorias("tabelaCategorias", "subCategorias", 20, false, null, true);
+      preencherCategorias("tabelaCategorias", "subCategorias", 20, null, true);
     }
   }
 
@@ -3412,6 +3431,31 @@
        "Engajamento (%)", "CSAT (%)", "Resolvidos (%)", "TMA (min)"],
       linhas);
   });
+  // Checkbox "mostrar encerramentos": existe em dois lugares (card da Performance e seção
+  // Categorias) porque vale para as duas telas — quem está numa não precisa ir na outra pra
+  // mexer. Mesma preferência, então os dois ficam em sincronia.
+  const CHECKS_ENC = ["mostrarEncerramentosP", "mostrarEncerramentos"];
+
+  function aplicarPrefEnc(valor) {
+    estado.mostrarEncerramentos = valor;
+    salvarPrefEnc(valor);
+    CHECKS_ENC.forEach((id) => { const el = $(id); if (el) el.checked = valor; });
+    // Redesenha só o que está na tela: as duas seções usam a mesma preferência.
+    if (estado.dados) {
+      renderCategoriasPerf();
+      renderCategorias();
+    }
+  }
+
+  CHECKS_ENC.forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener("change", (e) => aplicarPrefEnc(e.target.checked));
+  });
+
+  // Estado inicial, antes de qualquer render (aplicarPrefEnc redesenharia à toa no boot).
+  estado.mostrarEncerramentos = lerPrefEnc();
+  CHECKS_ENC.forEach((id) => { const el = $(id); if (el) el.checked = estado.mostrarEncerramentos; });
+
   // Alterna a visão do ranking (gestão): "Por fila" (2 categorias) ↔ "Geral" (todo o Suporte).
   $("rankingViewTabs").addEventListener("click", (e) => {
     const btn = e.target.closest(".tab");
